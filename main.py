@@ -533,7 +533,11 @@ def run_bot() -> None:
     
     logger.info("Senorita Bot is starting... Running 24/7 with Groq AI!")
     print("Senorita Bot is running 24/7! Powered by Groq AI!")
-    application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+    application.run_polling(
+    allowed_updates=Update.ALL_TYPES,
+    drop_pending_updates=True,
+    stop_signals=None   # <--- Yeh line add kar de, signal crash avoid karega
+    )
 
 if __name__ == "__main__":
     threading.Thread(target=run_bot).start()
