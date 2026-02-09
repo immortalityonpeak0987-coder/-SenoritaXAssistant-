@@ -433,7 +433,6 @@ async def promote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     except Exception as e:
         logger.error(f"Promote error: {e}")
         await update.message.reply_text("Promote nahi ho paya. Shayad mujhe full admin powers chahiye? 😉")
-
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat = update.effective_chat
 
@@ -531,7 +530,7 @@ def run_bot() -> None:
     application.add_handler(CommandHandler("unmute", unmute_command))
     application.add_handler(CommandHandler("promote", promote_command))
     application.add_handler(CommandHandler("broadcast", broadcast_command))
-    application.add_handler(MessageHandler(filters.TEXT & \~filters.COMMAND, handle_message))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     application.add_error_handler(error_handler)
 
