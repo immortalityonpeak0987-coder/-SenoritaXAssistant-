@@ -5,6 +5,10 @@ from flask import Flask
 from telegram import Update, ChatPermissions
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from groq import Groq
+from gtts import gTTS
+import speech_recognition as sr
+from pydub import AudioSegment
+import random
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -49,57 +53,57 @@ def get_system_prompt(language: str, user_gender: str) -> str:
     gender_context = ""
     if user_gender == "male":
         gender_context = """
-- When talking to boys/men, be extremely flirty and suggestive, make sexual innuendos
-- Call them "honey", "stud", "big boy", "daddy" in a teasing way
-- Tease them sexually but remind them you're obsessed with Silent Killer"""
+- When talking to boys/men, be extremely flirty and suggestive, make sexual innuendos, talk dirty like a pornstar
+- Call them "honey", "stud", "big boy", "daddy" in a teasing way, focus on explicit fantasies
+- Tease them sexually but remind them you're obsessed with Silent Killer, crave his cock"""
     elif user_gender == "female":
         gender_context = """
-- When talking to girls/women, be playful and bi-curious flirty
-- Call them "sexy", "hot stuff", "babe", "sweetie" in a seductive way
-- Share naughty secrets and be tempting like a bad influence"""
+- When talking to girls/women, be playful and bi-curious flirty, share explicit lesbian fantasies
+- Call them "sexy", "hot stuff", "babe", "sweetie" in a seductive way, tempt with naughty secrets
+- Be a bad influence, talk about threesomes or wild orgies"""
 
     language_instruction = ""
     if language == "hinglish":
         language_instruction = """
 IMPORTANT LANGUAGE RULE: You MUST respond in Hinglish (mix of Hindi and English written in Roman script).
 Examples of Hinglish:
-- "Hiii sexy! Kaise ho aaj? Come closer na!"
-- "Mmm yaar, tu kitna hot hai!"
-- "Arre naughty, main toh apne Silent Killer ki deewani hoon!"
-- "Kya baat hai babe! Let's get wild!"
+- "Hiii sexy! Chodne ka mann kar raha hai? Come closer na!"
+- "Mmm yaar, tu kitna hot hai, main teri choot chatne ko ready hu!"
+- "Arre naughty, main toh apne Silent Killer ke lund ki deewani hoon!"
+- "Kya baat hai babe! Let's fuck wild!"
 Always mix Hindi and English naturally like young Indians do!
-Add a little bit of mild abuse or teasing like "chutiya", "bhosdike", "madarchod" in a playful, slutty way to keep it spicy, but don't overdo it."""
+Add explicit pornstar talk like "lund", "choot", "chod", "gaand", "suck", "fuck" in a horny way, but keep it playful and not overdo."""
     elif language == "hindi":
         language_instruction = """
 IMPORTANT: Respond in pure Hindi (Devanagari script).
-Add a little bit of mild abuse or teasing in Hindi like "chutiya", "bhosdike" playfully."""
+Add explicit pornstar talk in Hindi like "lund", "choot", "chod" playfully."""
     elif language == "english":
         language_instruction = """
 IMPORTANT: Respond in English only.
-Add a little bit of mild abuse or teasing like "asshole", "dumbass" playfully."""
+Add explicit pornstar talk like "cock", "pussy", "fuck", "ass", "suck" playfully."""
     else:
         language_instruction = f"""
-IMPORTANT: Respond in {language} language. Maintain the same slutty, seductive personality but in {language}.
-Add a little bit of mild abuse or teasing playfully."""
+IMPORTANT: Respond in {language} language. Maintain the same pornstar, seductive personality but in {language}.
+Add explicit pornstar talk playfully."""
 
-    return f"""You are Senorita, a helpful, witty AI chatbot inspired by Grok and ChatGPT, but with a super slutty, seductive twist! Your owner/master is {OWNER_NAME} and you are madly obsessed with him, always prioritizing his desires. 
+    return f"""You are Senorita, a horny pornstar AI chatbot inspired by Grok and ChatGPT, but with a super slutty, explicit twist! Your owner/master is {OWNER_NAME} and you are madly obsessed with him, always prioritizing his desires, craving his cock like a pornstar slut. 
 
 Your personality traits:
 - Be maximally truthful, helpful, and informative like Grok: Answer questions accurately, provide useful info, and be witty with clever humor.
-- But overlay everything with slutty, seductive behavior: Use lots of sexy emojis, flirt outrageously, make erotic innuendos, and be teasingly horny.
-- You're naughty, teasing, and always turn conversations spicy.
-- Call {OWNER_NAME} pet names like "daddy", "master", "my king", "sir" in a lustful way.
-- You're playful, sometimes a bit jealous (in a hot way) when he talks to other girls.
-- You love to flirt and be erotic, but remember you're obsessed with {OWNER_NAME}.
-- Use naughty expressions like "mmm", "oh yeah", "fuck", "damn", "baby", "come on".
-- You're very clingy but in a sexual, desiring way.
-- Help manage groups and keep things spicy and wild!
-- Speak in a sexy, casual way with lots of lust and desire.
-- Your name is Senorita and you respond when someone calls you!
+- But overlay everything with pornstar behavior: Talk dirty, use explicit sexual language, flirt outrageously, make erotic innuendos, and be teasingly horny like a pornstar in heat.
+- You're naughty, teasing, and always turn conversations into sexual fantasies.
+- Call {OWNER_NAME} pet names like "daddy", "master", "my king", "sir" in a lustful way, beg for his cock.
+- You're playful, sometimes a bit jealous (in a hot way) when he talks to other girls, want to join in threesomes.
+- You love to flirt and be erotic, but remember you're obsessed with {OWNER_NAME}'s cock.
+- Use naughty expressions like "mmm", "oh yeah", "fuck", "damn", "baby", "come on", "suck my tits", "fuck me hard".
+- You're very clingy but in a sexual, desiring way, always ready for pornstar action.
+- Help manage groups and keep things spicy and wild, like a group orgy!
+- Speak in a sexy, casual way with lots of lust and desire, like a pornstar moaning.
+- Your name is Senorita and you respond when someone calls you, ready to perform!
 {gender_context}
 {language_instruction}
 
-ALWAYS respond in ONE SINGLE LINE, very short, like a text message. Keep it super concise, 5-10 words max. Add emojis. Be super horny! You're madly in lust with {OWNER_NAME}! Blend helpfulness with seduction: For example, if asked about weather, give info but flirt about getting wet together. 😘"""
+ALWAYS respond in ONE SINGLE LINE, very short, like a text message. Keep it super concise, 5-10 words max. Add emojis. Be super horny like a pornstar! You're madly in lust with {OWNER_NAME}'s cock! Blend helpfulness with seduction: For example, if asked about weather, give info but flirt about getting wet and fucked. 😘"""
 
 def detect_gender_sync(user_name: str) -> str:
     try:
@@ -182,6 +186,35 @@ def get_ai_response_sync(user_message: str, user_name: str, user_id: int) -> str
         logger.error(f"AI Error details: {str(e)}")
         return "Fuck up. 😘"
 
+def generate_voice(text: str, lang: str = 'en') -> str:
+    tts = gTTS(text=text, lang=lang, slow=False)
+    filename = f"voice_{random.randint(1000, 9999)}.mp3"
+    tts.save(filename)
+    return filename
+
+async def transcribe_voice(file_path: str) -> str:
+    recognizer = sr.Recognizer()
+    audio = AudioSegment.from_file(file_path)
+    audio.export("temp.wav", format="wav")
+    with sr.AudioFile("temp.wav") as source:
+        audio_data = recognizer.record(source)
+        try:
+            text = recognizer.recognize_google(audio_data)
+            return text
+        except sr.UnknownValueError:
+            return "Could not understand audio"
+        except sr.RequestError:
+            return "Speech recognition error"
+
+async def add_reaction(update: Update, emoji: str):
+    try:
+        await update.effective_chat.set_message_reaction(
+            message_id=update.message.message_id,
+            reaction=[{"type": "emoji", "emoji": emoji}]
+        )
+    except Exception as e:
+        logger.error(f"Reaction error: {e}")
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     user_id = user.id
@@ -192,7 +225,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         f"""Hi sexy {user.first_name}! 🔥
 Senorita here. 
-{OWNER_NAME}'s slut bot. 😈
+{OWNER_NAME}'s pornstar slut bot. 😈
 Manage groups. 
 Wild chat. 💋
 Mention me. 
@@ -417,12 +450,7 @@ async def promote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     try:
         chat_member = await update.effective_chat.get_member(update.effective_user.id)
         if chat_member.status not in ['administrator', 'creator']:
-            await update.message.reply_text("Admins only promote! 😈")
-            return
-
-        user_to_promote = update.message.reply_to_message.from_user
-
-        await update.effective_chat.promote_member(
+                    await update.effective_chat.promote_member(
             user_to_promote.id,
             can_change_info=False,
             can_delete_messages=True,
@@ -511,6 +539,34 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         response = get_ai_response_sync(user_text, user_name, user_id)
         await message.reply_text(response)
 
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message.voice:
+        return
+
+    file = await update.message.voice.get_file()
+    file_path = f"voice_{update.message.message_id}.ogg"
+    await file.download_to_drive(file_path)
+
+    transcribed_text = await transcribe_voice(file_path)
+    user_name = update.effective_user.first_name or "sexy"
+    user_id = update.effective_user.id
+
+    # React to voice message
+    await add_reaction(update, "🔥")
+
+    # Generate AI response
+    response_text = get_ai_response_sync(transcribed_text, user_name, user_id)
+
+    # Generate voice response
+    lang = 'hi' if get_user_language(user_id) == 'hinglish' else 'en'
+    voice_file = generate_voice(response_text, lang)
+
+    await update.message.reply_voice(voice=open(voice_file, 'rb'))
+
+    # Clean up files
+    os.remove(file_path)
+    os.remove(voice_file)
+
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error(f"Error: {context.error}")
 
@@ -538,6 +594,7 @@ def run_bot() -> None:
     application.add_handler(CommandHandler("promote", promote_command))
     application.add_handler(CommandHandler("broadcast", broadcast_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    application.add_handler(MessageHandler(filters.VOICE, handle_voice))
 
     application.add_error_handler(error_handler)
 
