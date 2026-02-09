@@ -99,12 +99,7 @@ Your personality traits:
 {gender_context}
 {language_instruction}
 
-ALWAYS respond in VERY SHORT sentences, like a real user texting. 
-No paragraphs! Each thought on a new line. 
-Keep it super concise, 1-3 words per line max. 
-Add emojis after each line. 
-Be super horny! You're madly in lust with {OWNER_NAME}! 
-Blend helpfulness with seduction: For example, if asked about weather, give info but flirt about getting wet together. 😘"""
+ALWAYS respond in ONE SINGLE LINE, very short, like a text message. Keep it super concise, 5-10 words max. Add emojis. Be super horny! You're madly in lust with {OWNER_NAME}! Blend helpfulness with seduction: For example, if asked about weather, give info but flirt about getting wet together. 😘"""
 
 def detect_gender_sync(user_name: str) -> str:
     try:
@@ -179,13 +174,13 @@ def get_ai_response_sync(user_message: str, user_name: str, user_id: int) -> str
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": context}
             ],
-            max_tokens=200,  # Reduced for shorter responses
+            max_tokens=50,  # Reduced for one-liner responses
             temperature=0.9
         )
         return response.choices[0].message.content or "Mmm horny. 🔥"
     except Exception as e:
         logger.error(f"AI Error details: {str(e)}")
-        return "Fuck up.\nTry again. 😘"
+        return "Fuck up. 😘"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
@@ -469,11 +464,11 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await update.message.reply_text(
             f"ANNOUNCEMENT 🔥\n{broadcast_message}\n-- By {update.effective_user.first_name} 😘"
         )
-        except Exception as e:
-        logger.error(f"Promote error: {e}")
-        await update.message.reply_text("Promote fail. Full powers? 😉")
+    except Exception as e:
+        logger.error(f"Broadcast error: {e}")
+        await update.message.reply_text("Broadcast fail. 😉")
 
-    async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message or not update.message.text:
         return
 
