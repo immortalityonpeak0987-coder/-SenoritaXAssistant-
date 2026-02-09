@@ -469,6 +469,9 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await update.message.reply_text(
             f"ANNOUNCEMENT 🔥\n{broadcast_message}\n-- By {update.effective_user.first_name} 😘"
         )
+        except Exception as e:
+        logger.error(f"Promote error: {e}")
+        await update.message.reply_text("Promote fail. Full powers? 😉")
 
     async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message or not update.message.text:
