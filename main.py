@@ -448,7 +448,7 @@ async def promote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
 
     try:
-                chat_member = await update.effective_chat.get_member(update.effective_user.id)
+                        chat_member = await update.effective_chat.get_member(update.effective_user.id)
         if chat_member.status not in ['administrator', 'creator']:
             await update.message.reply_text("Admins only promote! 😈")
             return
