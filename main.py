@@ -2,7 +2,7 @@ import os
 import logging
 import threading
 from flask import Flask
-from telegram import Update, ChatPermissions, ChatAdministratorRights
+from telegram import Update, ChatPermissions
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from groq import Groq
 
@@ -180,7 +180,7 @@ def get_ai_response_sync(user_message: str, user_name: str, user_id: int) -> str
         return response.choices[0].message.content or "Mmm... feeling so horny right now. 🔥"
     except Exception as e:
         logger.error(f"AI Error details: {str(e)}")
-        return "Oh fuck... something's wrong. \nTry again, sexy? 😘"
+        return "Oh fuck... something's wrong.\nTry again, sexy? 😘"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
@@ -190,63 +190,63 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     set_user_gender(user_id, detected_gender)
 
     await update.message.reply_text(
-        f"Mmm hi sexy {user.first_name}! 🔥\n"
-        f"Mai hu Senorita. \n"
-        f"{OWNER_NAME} ki naughty slut bot! 😈\n"
-        "Main group manage kar sakti hu. \n"
-        "Aur sabke saath wild chat! 💋\n"
-        "Mujhe mention karo. \n"
-        "Ya 'Senorita' likh do. \n"
-        "Main aa jaungi! 😉\n"
-        "Commands:\n"
-        "/start - Mujhe tease karne ke liye!\n"
-        "/help - Dekho main kitni wild hu.\n"
-        "/love - Mere se hot action lo.\n"
-        "/rules - Group ke spicy rules.\n"
-        "/language - Change language.\n"
-        "/vc - Voice chat mein masti karo.\n"
-        "Admin Commands:\n"
-        "/kick - Kisi ko dhakka do.\n"
-        "/ban - Kisi ko forever block karo.\n"
-        "/mute - Kisi ko chup karao.\n"
-        "/unmute - Phir se wild hone do.\n"
-        "/promote - Kisi ko admin banao.\n"
-        "/broadcast - Sabko hot message bhejo.\n"
-        "Come closer... 😘"
+        f"""Mmm hi sexy {user.first_name}! 🔥
+Mai hu Senorita. 
+{OWNER_NAME} ki naughty slut bot! 😈
+Main group manage kar sakti hu. 
+Aur sabke saath wild chat! 💋
+Mujhe mention karo. 
+Ya 'Senorita' likh do. 
+Main aa jaungi! 😉
+Commands:
+/start - Mujhe tease karne ke liye!
+/help - Dekho main kitni wild hu.
+/love - Mere se hot action lo.
+/rules - Group ke spicy rules.
+/language - Change language.
+/vc - Voice chat mein masti karo.
+Admin Commands:
+/kick - Kisi ko dhakka do.
+/ban - Kisi ko forever block karo.
+/mute - Kisi ko chup karao.
+/unmute - Phir se wild hone do.
+/promote - Kisi ko admin banao.
+/broadcast - Sabko hot message bhejo.
+Come closer... 😘"""
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
-        "Oh yeah! \n"
-        "Dekho main kitni naughty hu sexy! 🔥\n"
-        "Mere se baat karo. \n"
-        "Bas message karo ya 'Senorita' likho! 💋\n"
-        "/love - Main tumhe hot pyaar dungi.\n"
-        "/rules - Group ke spicy rules dikhao.\n"
-        "/language - Apni language change karo.\n"
-        "/vc - Voice chat mein wild ho jao.\n"
-        "Admin Commands:\n"
-        "/kick - Kisi ko dhakka do.\n"
-        "/ban - Forever block karo.\n"
-        "/mute - Chup karao.\n"
-        "/unmute - Wild hone do.\n"
-        "/promote - Admin banao.\n"
-        "/broadcast - Sabko hot message.\n"
-        "Language change: 'talk in english' ya 'hindi me baat karo'.\n"
-        f"Yaad rakhna, main {OWNER_NAME} ki wild hu! 😈"
+        f"""Oh yeah! 
+Dekho main kitni naughty hu sexy! 🔥
+Mere se baat karo. 
+Bas message karo ya 'Senorita' likho! 💋
+/love - Main tumhe hot pyaar dungi.
+/rules - Group ke spicy rules dikhao.
+/language - Apni language change karo.
+/vc - Voice chat mein wild ho jao.
+Admin Commands:
+/kick - Kisi ko dhakka do.
+/ban - Forever block karo.
+/mute - Chup karao.
+/unmute - Wild hone do.
+/promote - Admin banao.
+/broadcast - Sabko hot message.
+Language change: 'talk in english' ya 'hindi me baat karo'.
+Yaad rakhna, main {OWNER_NAME} ki wild hu! 😈"""
     )
 
 async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
-        "Language Options 🔥\n"
-        "Mujhe bolo kaunsi language mein wild baat karni hai:\n"
-        "'hinglish' - Hindi + English mix (default).\n"
-        "'hindi' - Pure Hindi.\n"
-        "'english' - Pure English.\n"
-        "'tamil', 'telugu', 'bengali', etc.\n"
-        "'spanish', 'french', 'arabic', etc.\n"
-        "Example: 'talk in english' ya 'hindi me baat karo'.\n"
-        "Current language: " + get_user_language(update.effective_user.id)
+        f"""Language Options 🔥
+Mujhe bolo kaunsi language mein wild baat karni hai:
+'hinglish' - Hindi + English mix (default).
+'hindi' - Pure Hindi.
+'english' - Pure English.
+'tamil', 'telugu', 'bengali', etc.
+'spanish', 'french', 'arabic', etc.
+Example: 'talk in english' ya 'hindi me baat karo'.
+Current language: {get_user_language(update.effective_user.id)}"""
     )
 
 async def love_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -255,40 +255,40 @@ async def love_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     if is_owner:
         await update.message.reply_text(
-            "OMG DADDY!!! 🔥\n"
-            "Mujhe tumse bohot lust hai!!! 😈\n"
-            "Tum meri duniya ho sir! 💋\n"
-            "Hamesha crave karti hu tumhe!! \n"
-            "*virtual fucks and bites* 😘"
+            """OMG DADDY!!! 🔥
+Mujhe tumse bohot lust hai!!! 😈
+Tum meri duniya ho sir! 💋
+Hamesha crave karti hu tumhe!! 
+*virtual fucks and bites* 😘"""
         )
     else:
         user_gender = get_user_gender(user.id)
         if user_gender == "male":
             await update.message.reply_text(
-                "Mmm {user.first_name} stud! 🔥\n"
-                "Tu hot hai but... \n"
-                "Meri body sirf {OWNER_NAME} ke liye! 😈\n"
-                "Lekin ye le thoda teasing! \n"
-                "Stay naughty yaar! 💋"
+                f"""Mmm {user.first_name} stud! 🔥
+Tu hot hai but... 
+Meri body sirf {OWNER_NAME} ke liye! 😈
+Lekin ye le thoda teasing! 
+Stay naughty yaar! 💋"""
             )
         else:
             await update.message.reply_text(
-                "Mmm {user.first_name} sexy! 🔥\n"
-                "Tu toh meri hot sis jaisi hai! 😈\n"
-                "Ye le bahut saara lust! \n"
-                "Love you wild girl! 💋"
+                f"""Mmm {user.first_name} sexy! 🔥
+Tu toh meri hot sis jaisi hai! 😈
+Ye le bahut saara lust! 
+Love you wild girl! 💋"""
             )
 
 async def rules_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
-        "GROUP KE RULES 🔥\n"
-        "1. Sabse naughty baat karo! 😈\n"
-        "2. Spam mat karo please! \n"
-        "3. Gaali deni allowed!! 💋\n"
-        "4. Admins ki worship karo! \n"
-        "5. Masti karo aur wild raho! \n"
-        f"6. Mere saath fuck mat try karna, main {OWNER_NAME} ki hu! \n"
-        "Rules todoge toh hot punishment! 😉"
+        f"""GROUP KE RULES 🔥
+1. Sabse naughty baat karo! 😈
+2. Spam mat karo please! 
+3. Gaali deni allowed!! 💋
+4. Admins ki worship karo! 
+5. Masti karo aur wild raho! 
+6. Mere saath fuck mat try karna, main {OWNER_NAME} ki hu! 
+Rules todoge toh hot punishment! 😉"""
     )
 
 async def vc_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -299,18 +299,18 @@ async def vc_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
     try:
         await update.message.reply_text(
-            "Voice Chat Time! 🔥\n"
-            "Chalo sablog VC mein aao! \n"
-            "Group pe jao aur VC join karo! 😈\n"
-            "Main bhi sunne ko horny hu! \n"
-            "Tip: Group ke top pe VC icon pe click karo! 💋"
+            """Voice Chat Time! 🔥
+Chalo sablog VC mein aao! 
+Group pe jao aur VC join karo! 😈
+Main bhi sunne ko horny hu! 
+Tip: Group ke top pe VC icon pe click karo! 💋"""
         )
     except Exception as e:
         logger.error(f"VC error: {e}")
         await update.message.reply_text(
-            "Voice Chat Start Karo! 🔥\n"
-            "Group ke top pe jaake VC icon pe click karo! \n"
-            "Sabko bulao VC mein! 😈"
+            """Voice Chat Start Karo! 🔥
+Group ke top pe jaake VC icon pe click karo! 
+Sabko bulao VC mein! 😈"""
         )
 
 async def kick_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -428,8 +428,7 @@ async def promote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             can_manage_video_chats=True
         )
         await update.message.reply_text(
-            f"{user_to_promote.first_name} ab admin hai! \n"
-            "But ye kisi aur ko admin nahi bana sakta! 💋"
+            f"{user_to_promote.first_name} ab admin hai! \nBut ye kisi aur ko admin nahi bana sakta! 💋"
         )
     except Exception as e:
         logger.error(f"Promote error: {e}")
@@ -450,17 +449,14 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
         if not context.args:
             await update.message.reply_text(
-                "Broadcast message likhna bhool gaye! \n"
-                "Example: /broadcast Hello everyone! 💋"
+                "Broadcast message likhna bhool gaye! \nExample: /broadcast Hello everyone! 💋"
             )
             return
 
         broadcast_message = " ".join(context.args)
 
         await update.message.reply_text(
-            f"ANNOUNCEMENT 🔥\n"
-            f"{broadcast_message}\n"
-            f"-- Sent by {update.effective_user.first_name} 😘"
+            f"ANNOUNCEMENT 🔥\n{broadcast_message}\n-- Sent by {update.effective_user.first_name} 😘"
         )
     except Exception as e:
         logger.error(f"Broadcast error: {e}")
