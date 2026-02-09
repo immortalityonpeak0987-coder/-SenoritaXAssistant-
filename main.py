@@ -186,8 +186,8 @@ def get_ai_response_sync(user_message: str, user_name: str, user_id: int) -> str
         logger.error(f"AI Error details: {str(e)}")
         return "Fuck up. 😘"
 
-def generate_voice(text: str, lang: str = 'ml') -> str:  # Changed default to 'ml' for desi Mallu (Malayalam) voice
-    tts = gTTS(text=text, lang=lang, slow=False)
+def generate_voice(text: str, lang: str = 'hi') -> str:  # Changed default to 'hi' for desi Hindi voice, more realistic
+    tts = gTTS(text=text, lang=lang, slow=True)  # Added slow=True for more realistic, natural pace
     filename = f"voice_{random.randint(1000, 9999)}.mp3"
     tts.save(filename)
     return filename
@@ -448,7 +448,14 @@ async def promote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
 
     try:
-        chat_member =         await update.effective_chat.promote_member(
+                chat_member = await update.effective_chat.get_member(update.effective_user.id)
+        if chat_member.status not in ['administrator', 'creator']:
+            await update.message.reply_text("Admins only promote! 😈")
+            return
+
+        user_to_promote = update.message.reply_to_message.from_user
+
+        await update.effective_chat.promote_member(
             user_to_promote.id,
             can_change_info=False,
             can_delete_messages=True,
@@ -556,7 +563,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     response_text = get_ai_response_sync(transcribed_text, user_name, user_id)
 
     # Generate voice response
-    lang = 'ml' if get_user_language(user_id) == 'hinglish' else 'en'  # Default to 'ml' for desi Mallu voice
+    lang = 'hi' if get_user_language(user_id) == 'hinglish' else 'en'  # Default to 'hi' for desi Hindi voice, more realistic
     voice_file = generate_voice(response_text, lang)
 
     await update.message.reply_voice(voice=open(voice_file, 'rb'))
