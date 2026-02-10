@@ -452,7 +452,7 @@ async def promote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             f"{user_to_promote.first_name} admin now! \nCan't promote others! 💋"
         )
     except Exception as e:
-                logger.error(f"Promote error: {e}")
+        logger.error(f"Promote error: {e}")
         await update.message.reply_text("Promote fail. Full powers? 😉")
 
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
