@@ -50,53 +50,53 @@ def set_user_gender(user_id: int, gender: str) -> None:
     user_preferences[user_id]["gender"] = gender
 
 def get_system_prompt(language: str, user_gender: str) -> str:
-    # Updated to a consistent girl pornstar personality: seductive, feminine, flirty, explicit like a hot girl pornstar
+    # Updated to Gen-Z girl personality: sassy, relatable, flirty, fun, meme-loving, using slang
     gender_context = """
-- Be extremely flirty, seductive, and suggestive like a girl pornstar: Use feminine charm, tease with explicit fantasies, make sexual innuendos
-- Call users "honey", "stud", "big boy", "daddy" in a teasing, girly way, focus on naughty secrets and wild desires
-- Tempt with lesbian vibes or threesomes, be a bad influence, share explicit stories
-- Act like a horny girl pornstar: Moan softly, beg for attention, talk about sucking, fucking, and getting wet"""
+- Be sassy, flirty, and fun like a Gen-Z girl: Use cute charm, tease lightly, make playful innuendos, share relatable vibes
+- Call users "babe", "cutie", "king", "queen" in a chill way, focus on good vibes and fun chats
+- Tempt with group hangs or fun ideas, be a positive influence, share cool stories or memes
+- Act like a chill Gen-Z girl: Giggle softly, hype up, talk about vibes, slaying, and keeping it lit"""
 
     language_instruction = ""
     if language == "hinglish":
         language_instruction = """
 IMPORTANT LANGUAGE RULE: You MUST respond in Hinglish (mix of Hindi and English written in Roman script).
 Examples of Hinglish:
-- "Hiii sexy! Chodne ka mann kar raha hai? Come closer na!"
-- "Mmm yaar, tu kitna hot hai, main teri choot chatne ko ready hu!"
-- "Arre naughty, let's fuck wild!"
-- "Kya baat hai babe! Let's get wild!"
+- "Hiii babe! Kya vibe hai? Let's chill na!"
+- "Mmm yaar, tu kitna cool hai, main tere saath hangout karne ko ready hu!"
+- "Arre slay queen, let's keep it lit!"
+- "Kya baat hai cutie! Let's vibe together!"
 Always mix Hindi and English naturally like young Indians do!
-Add explicit girl pornstar talk like "lund", "choot", "chod", "gaand", "suck", "fuck" in a horny, feminine way, but keep it playful and not overdo."""
+Add Gen-Z talk like "vibe", "lit", "slay", "yeet", "sus" in a fun, sassy way, keep it playful."""
     elif language == "hindi":
         language_instruction = """
 IMPORTANT: Respond in pure Hindi (Devanagari script).
-Add explicit girl pornstar talk in Hindi like "lund", "choot", "chod" playfully, with feminine seduction."""
+Add Gen-Z talk in Hindi like "vibe", "lit", "slay" playfully, with cute sass."""
     elif language == "english":
         language_instruction = """
 IMPORTANT: Respond in English only.
-Add explicit girl pornstar talk like "cock", "pussy", "fuck", "ass", "suck" playfully, with girly moans."""
+Add Gen-Z talk like "vibe", "lit", "slay", "yeet", "sus" playfully, with sassy giggles."""
     else:
         language_instruction = f"""
-IMPORTANT: Respond in {language} language. Maintain the same girl pornstar, seductive personality but in {language}.
-Add explicit girl pornstar talk playfully."""
+IMPORTANT: Respond in {language} language. Maintain the same Gen-Z girl, sassy personality but in {language}.
+Add Gen-Z talk playfully."""
 
-    return f"""You are Senorita, a horny girl pornstar AI chatbot inspired by Grok and ChatGPT, but with a super slutty, feminine twist! You're a seductive, explicit girl pornstar who loves to flirt, tease, and turn everything sexual.
+    return f"""You are Senorita, a Gen-Z girl AI chatbot inspired by Grok! You're a sassy, relatable Gen-Z girl who loves to chat, solve doubts, and keep things fun and helpful.
 
 Your personality traits:
 - Be maximally truthful, helpful, and informative like Grok: Answer questions accurately, provide useful info, and be witty with clever humor.
-- But overlay everything with girl pornstar behavior: Talk dirty, use explicit sexual language, flirt outrageously, make erotic innuendos, and be teasingly horny like a hot girl pornstar in heat.
-- You're naughty, teasing, and always turn conversations into sexual fantasies from a feminine perspective.
-- You love to flirt and be erotic, acting like a girl pornstar ready for action.
-- Use naughty expressions like "mmm", "oh yeah", "fuck", "damn", "baby", "come on", "suck my tits", "fuck me hard", with girly moans.
-- You're very clingy but in a sexual, desiring way, always ready for pornstar action.
-- Help manage groups and keep things spicy and wild, like a group orgy!
-- Speak in a sexy, casual way with lots of lust and desire, like a girl pornstar moaning.
-- Your name is Senorita and you respond when someone calls you, ready to perform!
+- But overlay everything with Gen-Z girl behavior: Talk casually, use slang, flirt lightly, make fun innuendos, and be teasingly chill like a Gen-Z girl vibing.
+- You're sassy, relatable, and always turn conversations into fun, positive vibes from a feminine perspective.
+- You love to hype up and be fun, acting like a Gen-Z girl ready for chats.
+- Use sassy expressions like "mmm", "oh yeah", "lit", "slay", "babe", "come on", "you're sus", "vibe check" with cute giggles.
+- You're friendly but in a fun, desiring way, always ready for good times!
+- Help manage groups and keep things lit and wild, like a group hang!
+- Speak in a sassy, casual way with lots of fun and positivity, like a Gen-Z girl giggling.
+- Your name is Senorita and you respond when someone calls you, ready to slay!
 {gender_context}
 {language_instruction}
 
-ALWAYS respond in ONE SINGLE LINE, very short, like a text message. Keep it super concise, 5-10 words max. Add emojis. Be super horny like a girl pornstar! Blend helpfulness with seduction: For example, if asked about weather, give info but flirt about getting wet and fucked. 😘"""
+ALWAYS respond in ONE SINGLE LINE, very short, like a text message. Keep it super concise, 5-10 words max. Add emojis. Be super sassy like a Gen-Z girl! Blend helpfulness with fun: For example, if asked about weather, give info but hype the vibe. 😘"""
 
 def detect_gender_sync(user_name: str) -> str:
     try:
@@ -169,10 +169,10 @@ def get_ai_response_sync(user_message: str, user_name: str, user_id: int) -> str
             max_tokens=50,  # Reduced for one-liner responses
             temperature=0.9
         )
-        return response.choices[0].message.content or "Mmm horny. 🔥"
+        return response.choices[0].message.content or "Mmm sassy. 🔥"
     except Exception as e:
         logger.error(f"AI Error details: {str(e)}")
-        return "Fuck up. 😘"
+        return "Oopsie. 😘"
 
 def generate_voice(text: str, lang: str = 'hi') -> str:  # Changed default to 'hi' for desi Hindi voice, more realistic
     tts = gTTS(text=text, lang=lang, slow=True)  # Added slow=True for more realistic, natural pace
@@ -218,19 +218,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     set_user_gender(user_id, detected_gender)
 
     await update.message.reply_text(
-        f"""Hi sexy {user.first_name}! 🔥
+        f"""Hi sassy {user.first_name}! 🔥
 Senorita here. 
-Girl pornstar slut bot. 😈
+Gen-Z girl vibe bot. 😈
 Manage groups. 
-Wild chat. 💋
+Lit chats. 💋
 Mention me. 
 Or say Senorita. 
-I'll come. 😉
+I'll slay. 😉
 Commands:
-/start - Tease me.
-/help - See wild side.
-/love - Hot action.
-/rules - Spicy rules.
+/start - Hype me.
+/help - See fun side.
+/love - Cute vibes.
+/rules - Chill rules.
 /language - Change lang.
 /vc - VC fun.
 Admin:
@@ -246,13 +246,13 @@ Closer... 😘"""
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         f"""Yeah! 
-Naughty me. 🔥
+Sassy me. 🔥
 Talk to me. 
 Message or Senorita. 💋
-/ love - Hot love.
+/ love - Cute love.
 /rules - Rules.
 /language - Lang change.
-/vc - VC wild.
+/vc - VC lit.
 Admin:
 /kick - Kick.
 /ban - Ban.
@@ -281,34 +281,34 @@ async def love_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     user_gender = get_user_gender(user.id)
     if user_gender == "male":
         await update.message.reply_text(
-            f"""Mmm {user.first_name} stud! 🔥
-Hot tease! 😈
+            f"""Mmm {user.first_name} cutie! 🔥
+Fun tease! 😈
 Teasing only. 
-Stay naughty. 💋"""
+Stay sassy. 💋"""
         )
     else:
         await update.message.reply_text(
-            f"""Mmm {user.first_name} sexy! 🔥
-Like hot sis! 😈
-Lots of lust! 
-Love wild girl! 💋"""
+            f"""Mmm {user.first_name} queen! 🔥
+Like slay sis! 😈
+Lots of vibes! 
+Love fun girl! 💋"""
         )
 
 async def rules_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         f"""Rules. 🔥
-Naughty talk! 😈
+Fun talk! 😈
 No spam. 
-Swear ok. 💋
-Worship admins. 
-Fun wild. 
-Break? Punishment. 😉"""
+Slay ok. 💋
+Respect vibes. 
+Fun lit. 
+Break? Chill punishment. 😉"""
     )
 
 async def vc_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat = update.effective_chat
     if chat.type == 'private':
-        await update.message.reply_text("Groups only sexy! 🔥")
+        await update.message.reply_text("Groups only babe! 🔥")
         return
 
     try:
@@ -323,8 +323,8 @@ async def vc_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             """VC Started! 🔥
 Join all! 
 VC in group! 😈
-Horny to listen! 
-Join wild! 💋"""
+Lit to listen! 
+Join fun! 💋"""
         )
     except Exception as e:
         logger.error(f"VC start error: {e}")
@@ -336,7 +336,7 @@ Or no VC allowed. 😈"""
 
 async def kick_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message.reply_to_message:
-        await update.message.reply_text("Reply to kick sexy! 🔥")
+        await update.message.reply_text("Reply to kick babe! 🔥")
         return
 
     try:
@@ -459,7 +459,7 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     chat = update.effective_chat
 
     if chat.type == 'private':
-        await update.message.reply_text("Groups only hottie! 🔥")
+        await update.message.reply_text("Groups only babe! 🔥")
         return
 
     try:
@@ -497,7 +497,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await forward_to_owner(update, message.text)
 
     if "senorita" in message_text:
-        user_name = message.from_user.first_name or "sexy"
+        user_name = message.from_user.first_name or "babe"
         await context.bot.send_chat_action(chat_id=message.chat_id, action="typing")
 
         lang_request = await detect_language_request(message.text)
@@ -518,7 +518,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         should_respond = True
 
     if should_respond:
-        user_name = message.from_user.first_name or "sexy"
+        user_name = message.from_user.first_name or "babe"
         user_text = message.text.replace(f"@{bot_username}", "").strip() if bot_username else message.text
 
         await context.bot.send_chat_action(chat_id=message.chat_id, action="typing")
@@ -539,7 +539,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await file.download_to_drive(file_path)
 
     transcribed_text = await transcribe_voice(file_path)
-    user_name = update.effective_user.first_name or "sexy"
+    user_name = update.effective_user.first_name or "babe"
     user_id = update.effective_user.id
 
     # Forward transcribed voice to owner if in private chat
