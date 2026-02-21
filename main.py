@@ -1,7 +1,7 @@
 import os
 import logging
 import asyncio
-from flask import Flask
+from flask import Flask, request, jsonify
 from telegram import Update, ChatPermissions
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from groq import Groq
@@ -631,14 +631,31 @@ application.add_handler(MessageHandler(filters.VOICE, handle_voice))
 
 application.add_error_handler(error_handler)
 
+# ===== WEBHOOK ROUTE =====
+@app.route(f"/{TELEGRAM_BOT_TOKEN}", methods=["POST"])
+async def webhook():
+    try:
+        update = Update.de_json(request.get_json(), application.bot)
+        
+        if update.message and update.message.text:
+            await handle_message(update, application.bot)
+        elif update.message and update.message.voice:
+            await handle_voice(update, application.bot)
+            
+    except Exception as e:
+        logger.error(f"Webhook error: {e}")
+    
+    return jsonify({"status": "ok"})
+
 # ===== RUN =====
-async def main():
-    logger.info("🤖 Starting Senorita Bot with webhooks...")
+if __name__ == "__main__":
+    logger.info("🚀 Starting Senorita Bot with webhooks...")
+    
+    # Set webhook
     webhook_url = os.environ.get("WEBHOOK_URL")
     if webhook_url:
-        await application.bot.set_webhook(f"{webhook_url}/{TELEGRAM_BOT_TOKEN}")
+        application.bot.set_webhook(f"{webhook_url}/{TELEGRAM_BOT_TOKEN}")
         logger.info(f"✅ Webhook set to: {webhook_url}/{TELEGRAM_BOT_TOKEN}")
+    
+    # Run Flask
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)), debug=False)
-
-if __name__ == "__main__":
-    asyncio.run(main())
