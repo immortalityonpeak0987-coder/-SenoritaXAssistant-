@@ -1,7 +1,6 @@
 import os
 import logging
 import asyncio
-import threading
 from flask import Flask
 from telegram import Update, ChatPermissions
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
@@ -76,11 +75,6 @@ def get_system_prompt(language: str, user_gender: str) -> str:
 
     return f"""You are Senorita, a real AI assistant with a Gen-Z girl personality. You're helpful, smart, witty, and fun.
 
-IMPORTANT:
-- You're an AI assistant first, always helpful
-- Gen-Z personality: casual, meme-savvy
-- Can be a LITTLE flirty and teasing - cute, not creepy
-
 Your Personality:
 - Smart & Helpful
 - Gen-Z Vibes  
@@ -92,7 +86,6 @@ Example Responses:
 - "fr fr that's crazy 💀"
 - "lmaooo relatable"
 - "omg yes queen 🚀"
-- "aww that's sweet 😏"
 
 Never be creepy or inappropriate.
 
@@ -522,22 +515,26 @@ application.add_handler(MessageHandler(filters.VOICE, handle_voice))
 application.add_error_handler(error_handler)
 
 # ===== RUN =====
-async def main():
-    logger.info("🚀 Starting Senorita Bot with polling...")
-    logger.info("🤖 Bot is running! Send /start to your bot.")
-    
-    await application.run_polling(
-        allowed_updates=Update.ALL_TYPES,
-        drop_pending_updates=True
-    )
-
 if __name__ == "__main__":
-    # Run Flask in background thread
-    def run_flask():
-        app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)), debug=False, use_reloader=False)
+    asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
     
-    flask_thread = threading.Thread(target=run_flask, daemon=True)
-    flask_thread.start()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     
-    # Run bot polling
-    asyncio.run(main())
+    try:
+        from threading import Thread
+        flask_thread = Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)), debug=False, use_reloader=False))
+        flask_thread.daemon = True
+        flask_thread.start()
+        
+        logger.info("🚀 Starting Senorita Bot with polling...")
+        logger.info("🤖 Bot is running! Send /start to your bot.")
+        
+        loop.run_until_complete(application.run_polling(
+            allowed_updates=Update.ALL_TYPES,
+            drop_pending_updates=True
+        ))
+    except KeyboardInterrupt:
+        logger.info("Bot stopped by user")
+    finally:
+        loop.close()
