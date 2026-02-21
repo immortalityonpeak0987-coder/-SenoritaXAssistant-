@@ -16,6 +16,10 @@ logger = logging.getLogger(__name__)
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 OWNER_ID = int(os.environ.get("OWNER_ID", 0))
+WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "")
+
+logger.info(f"TELEGRAM_BOT_TOKEN: {TELEGRAM_BOT_TOKEN[:10]}...")
+logger.info(f"WEBHOOK_URL: {WEBHOOK_URL}")
 
 client = Groq(api_key=GROQ_API_KEY)
 
@@ -24,6 +28,7 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
+    logger.info("🏠 Home page accessed")
     return "Senorita bot is alive 🔥"
 
 # ===== USER SESSIONS =====
@@ -530,6 +535,7 @@ application.add_error_handler(error_handler)
 async def webhook():
     try:
         update = Update.de_json(request.get_json(), application.bot)
+        logger.info(f"Received update: {update.message.text if update.message else 'No text'}")
         if update.message and update.message.text:
             await handle_message(update, application.bot)
         elif update.message and update.message.voice:
@@ -541,8 +547,13 @@ async def webhook():
 # ===== RUN =====
 if __name__ == "__main__":
     logger.info("🚀 Starting Senorita Bot with webhooks...")
-    webhook_url = os.environ.get("WEBHOOK_URL")
-    if webhook_url:
-        application.bot.set_webhook(f"{webhook_url}/{TELEGRAM_BOT_TOKEN}")
-        logger.info(f"✅ Webhook set to: {webhook_url}/{TELEGRAM_BOT_TOKEN}")
+    
+    if WEBHOOK_URL:
+        full_webhook_url = f"{WEBHOOK_URL}/{TELEGRAM_BOT_TOKEN}"
+        logger.info(f"✅ Setting webhook to: {full_webhook_url}")
+        application.bot.set_webhook(full_webhook_url)
+    else:
+        logger.warning("⚠️ WEBHOOK_URL not set! Set it in Environment variables.")
+    
+    logger.info("🌐 Starting Flask server...")
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)), debug=False)
