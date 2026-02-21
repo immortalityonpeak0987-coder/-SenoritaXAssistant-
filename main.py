@@ -1,7 +1,8 @@
 import os
 import logging
 import asyncio
-from flask import Flask, request, jsonify
+import threading
+from flask import Flask
 from telegram import Update, ChatPermissions
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from groq import Groq
@@ -17,10 +18,8 @@ logger = logging.getLogger(__name__)
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 OWNER_ID = int(os.environ.get("OWNER_ID", 0))
-WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "")
 
 logger.info(f"TELEGRAM_BOT_TOKEN: {TELEGRAM_BOT_TOKEN[:10]}...")
-logger.info(f"WEBHOOK_URL: {WEBHOOK_URL}")
 
 client = Groq(api_key=GROQ_API_KEY)
 
@@ -29,7 +28,6 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
-    logger.info("🏠 Home page accessed")
     return "Senorita bot is alive 🔥"
 
 # ===== USER SESSIONS =====
@@ -126,11 +124,9 @@ async def detect_language_request(message: str) -> str:
         "english": ["english", "english me", "angrezi"],
         "hinglish": ["hinglish", "mix"],
     }
-
     message_lower = message.lower()
     change_phrases = ["talk in", "speak in", "language", "switch to"]
     is_language_request = any(phrase in message_lower for phrase in change_phrases)
-
     if is_language_request:
         for lang, keywords in language_keywords.items():
             for keyword in keywords:
@@ -148,14 +144,11 @@ def get_ai_response_sync(user_message: str, user_name: str, user_id: int) -> str
 
         language = get_user_language(user_id)
         system_prompt = get_system_prompt(language, user_gender)
-
         conversation = get_conversation_history(user_id)
         
         messages = [{"role": "system", "content": system_prompt}]
-        
         for msg in conversation:
             messages.append(msg)
-        
         messages.append({"role": "user", "content": user_message})
 
         response = client.chat.completions.create(
@@ -167,10 +160,8 @@ def get_ai_response_sync(user_message: str, user_name: str, user_id: int) -> str
         )
         
         ai_response = response.choices[0].message.content or "haha fr 💀"
-        
         add_to_conversation(user_id, "user", user_message)
         add_to_conversation(user_id, "assistant", ai_response)
-        
         return ai_response
         
     except Exception as e:
@@ -212,7 +203,6 @@ async def forward_to_owner(update: Update, text: str):
             pass
 
 # ===== COMMAND HANDLERS =====
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     user_id = user.id
@@ -531,33 +521,23 @@ application.add_handler(MessageHandler(filters.VOICE, handle_voice))
 
 application.add_error_handler(error_handler)
 
-# ===== WEBHOOK ROUTE =====
-@app.route(f"/{TELEGRAM_BOT_TOKEN}", methods=["POST"])
-async def webhook():
-    try:
-        update = Update.de_json(request.get_json(), application.bot)
-        logger.info(f"Received update: {update.message.text if update.message else 'No text'}")
-        if update.message and update.message.text:
-            await handle_message(update, application.bot)
-        elif update.message and update.message.voice:
-            await handle_voice(update, application.bot)
-    except Exception as e:
-        logger.error(f"Webhook error: {e}")
-    return jsonify({"status": "ok"})
-
 # ===== RUN =====
-async def start_bot():
-    logger.info("🚀 Starting Senorita Bot with webhooks...")
+async def main():
+    logger.info("🚀 Starting Senorita Bot with polling...")
+    logger.info("🤖 Bot is running! Send /start to your bot.")
     
-    if WEBHOOK_URL:
-        full_webhook_url = f"{WEBHOOK_URL}/{TELEGRAM_BOT_TOKEN}"
-        logger.info(f"✅ Setting webhook to: {full_webhook_url}")
-        await application.bot.set_webhook(full_webhook_url)
-    else:
-        logger.warning("⚠️ WEBHOOK_URL not set! Set it in Environment variables.")
-    
-    logger.info("🌐 Starting Flask server...")
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)), debug=False)
+    await application.run_polling(
+        allowed_updates=Update.ALL_TYPES,
+        drop_pending_updates=True
+    )
 
 if __name__ == "__main__":
-    asyncio.run(start_bot())
+    # Run Flask in background thread
+    def run_flask():
+        app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)), debug=False, use_reloader=False)
+    
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    
+    # Run bot polling
+    asyncio.run(main())
