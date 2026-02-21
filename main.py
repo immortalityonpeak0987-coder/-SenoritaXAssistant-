@@ -1,13 +1,12 @@
 import os
 import logging
-import threading
+import asyncio
 from flask import Flask
 from telegram import Update, ChatPermissions
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from groq import Groq
 import speech_recognition as sr
 from pydub import AudioSegment
-import random
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -267,7 +266,6 @@ async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     user_sessions[user_id] = []
     await update.message.reply_text("chat cleared! fresh start ✨")
 
-# ===== VC COMMAND =====
 async def vc_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat = update.effective_chat
     
@@ -299,7 +297,6 @@ Make sure:
 - Bot is admin with video chat permission"""
         )
 
-# ===== PLAY COMMAND =====
 async def play_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat = update.effective_chat
     
@@ -328,7 +325,6 @@ async def play_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     
     group_vc_status[chat.id] = {"playing": True, "current_song": song_name}
 
-# ===== STOP COMMAND =====
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat = update.effective_chat
     
@@ -355,8 +351,6 @@ async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     except Exception as e:
         logger.error(f"Stop error: {e}")
         await update.message.reply_text("couldn't stop 💀")
-
-# ===== ADMIN COMMANDS =====
 
 async def kick_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message.reply_to_message:
@@ -638,20 +632,13 @@ application.add_handler(MessageHandler(filters.VOICE, handle_voice))
 application.add_error_handler(error_handler)
 
 # ===== RUN =====
+async def main():
+    logger.info("🤖 Starting Senorita Bot with webhooks...")
+    webhook_url = os.environ.get("WEBHOOK_URL")
+    if webhook_url:
+        await application.bot.set_webhook(f"{webhook_url}/{TELEGRAM_BOT_TOKEN}")
+        logger.info(f"✅ Webhook set to: {webhook_url}/{TELEGRAM_BOT_TOKEN}")
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)), debug=False)
+
 if __name__ == "__main__":
-    print("🤖 Starting Senorita Bot with polling...")
-    print("🌐 Starting Flask server...")
-    
-    polling_thread = threading.Thread(target=application.run_polling, kwargs={
-        "allowed_updates": Update.ALL_TYPES,
-        "drop_pending_updates": True,
-        "stop_signals": None
-    }, daemon=True)
-    polling_thread.start()
-    
-    app.run(
-        host="0.0.0.0",
-        port=int(os.environ.get("PORT", 10000)),
-        debug=False,
-        use_reloader=False
-    )   
+    asyncio.run(main())
