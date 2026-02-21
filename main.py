@@ -1,13 +1,11 @@
 import os
 import logging
-import threading
-from flask import Flask
+from flask import Flask, request, jsonify
 from telegram import Update, ChatPermissions
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from groq import Groq
 import speech_recognition as sr
 from pydub import AudioSegment
-import random
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -527,16 +525,24 @@ application.add_handler(MessageHandler(filters.VOICE, handle_voice))
 
 application.add_error_handler(error_handler)
 
+# ===== WEBHOOK ROUTE =====
+@app.route(f"/{TELEGRAM_BOT_TOKEN}", methods=["POST"])
+async def webhook():
+    try:
+        update = Update.de_json(request.get_json(), application.bot)
+        if update.message and update.message.text:
+            await handle_message(update, application.bot)
+        elif update.message and update.message.voice:
+            await handle_voice(update, application.bot)
+    except Exception as e:
+        logger.error(f"Webhook error: {e}")
+    return jsonify({"status": "ok"})
+
 # ===== RUN =====
 if __name__ == "__main__":
-    print("🤖 Starting Senorita Bot with polling...")
-    print("🌐 Starting Flask server...")
-    
-    polling_thread = threading.Thread(target=application.run_polling, kwargs={
-        "allowed_updates": Update.ALL_TYPES,
-        "drop_pending_updates": True,
-        "stop_signals": None
-    }, daemon=True)
-    polling_thread.start()
-    
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)), debug=False, use_reloader=False)
+    logger.info("🚀 Starting Senorita Bot with webhooks...")
+    webhook_url = os.environ.get("WEBHOOK_URL")
+    if webhook_url:
+        application.bot.set_webhook(f"{webhook_url}/{TELEGRAM_BOT_TOKEN}")
+        logger.info(f"✅ Webhook set to: {webhook_url}/{TELEGRAM_BOT_TOKEN}")
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)), debug=False)
