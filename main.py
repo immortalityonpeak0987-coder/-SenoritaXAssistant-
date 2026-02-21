@@ -21,7 +21,7 @@ OWNER_ID = int(os.environ.get("OWNER_ID", 0))
 
 client = Groq(api_key=GROQ_API_KEY)
 
-# ===== RENDER KEEP-ALIVE =====
+# ===== FLASK APP =====
 app = Flask(__name__)
 
 @app.route("/")
@@ -614,46 +614,44 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error(f"Error: {context.error}")
 
-def run_bot() -> None:
-    if not TELEGRAM_BOT_TOKEN:
-        logger.error("TELEGRAM_BOT_TOKEN not found!")
-        return
+# ===== BUILD APPLICATION =====
+application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
-    if not GROQ_API_KEY:
-        logger.error("GROQ_API_KEY not found!")
-        return
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CommandHandler("help", help_command))
+application.add_handler(CommandHandler("language", language_command))
+application.add_handler(CommandHandler("clear", clear_command))
+application.add_handler(CommandHandler("vc", vc_command))
+application.add_handler(CommandHandler("play", play_command))
+application.add_handler(CommandHandler("stop", stop_command))
+application.add_handler(CommandHandler("kick", kick_command))
+application.add_handler(CommandHandler("ban", ban_command))
+application.add_handler(CommandHandler("mute", mute_command))
+application.add_handler(CommandHandler("unmute", unmute_command))
+application.add_handler(CommandHandler("promote", promote_command))
+application.add_handler(CommandHandler("demote", demote_command))
+application.add_handler(CommandHandler("broadcast", broadcast_command))
 
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+application.add_handler(MessageHandler(filters.VOICE, handle_voice))
 
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("language", language_command))
-    application.add_handler(CommandHandler("clear", clear_command))
-    application.add_handler(CommandHandler("vc", vc_command))
-    application.add_handler(CommandHandler("play", play_command))
-    application.add_handler(CommandHandler("stop", stop_command))
-    application.add_handler(CommandHandler("kick", kick_command))
-    application.add_handler(CommandHandler("ban", ban_command))
-    application.add_handler(CommandHandler("mute", mute_command))
-    application.add_handler(CommandHandler("unmute", unmute_command))
-    application.add_handler(CommandHandler("promote", promote_command))
-    application.add_handler(CommandHandler("demote", demote_command))
-    application.add_handler(CommandHandler("broadcast", broadcast_command))
-    
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    application.add_handler(MessageHandler(filters.VOICE, handle_voice))
+application.add_error_handler(error_handler)
 
-    application.add_error_handler(error_handler)
-
-    logger.info("Senorita Bot starting...")
-    print("🤖 Bot running with Groq AI!")
-    
-    application.run_polling(
-        allowed_updates=Update.ALL_TYPES,
-        drop_pending_updates=True,
-        stop_signals=None
-    )
-
+# ===== RUN =====
 if __name__ == "__main__":
-    threading.Thread(target=run_bot).start()
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+    print("🤖 Starting Senorita Bot with polling...")
+    print("🌐 Starting Flask server...")
+    
+    polling_thread = threading.Thread(target=application.run_polling, kwargs={
+        "allowed_updates": Update.ALL_TYPES,
+        "drop_pending_updates": True,
+        "stop_signals": None
+    }, daemon=True)
+    polling_thread.start()
+    
+    app.run(
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 10000)),
+        debug=False,
+        use_reloader=False
+    )   
