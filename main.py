@@ -1,5 +1,6 @@
 import os
 import logging
+import asyncio
 from flask import Flask, request, jsonify
 from telegram import Update, ChatPermissions
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
@@ -545,15 +546,18 @@ async def webhook():
     return jsonify({"status": "ok"})
 
 # ===== RUN =====
-if __name__ == "__main__":
+async def start_bot():
     logger.info("🚀 Starting Senorita Bot with webhooks...")
     
     if WEBHOOK_URL:
         full_webhook_url = f"{WEBHOOK_URL}/{TELEGRAM_BOT_TOKEN}"
         logger.info(f"✅ Setting webhook to: {full_webhook_url}")
-        application.bot.set_webhook(full_webhook_url)
+        await application.bot.set_webhook(full_webhook_url)
     else:
         logger.warning("⚠️ WEBHOOK_URL not set! Set it in Environment variables.")
     
     logger.info("🌐 Starting Flask server...")
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)), debug=False)
+
+if __name__ == "__main__":
+    asyncio.run(start_bot())
