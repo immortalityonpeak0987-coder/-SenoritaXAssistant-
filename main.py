@@ -203,7 +203,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     set_user_gender(user_id, detected_gender)
     user_sessions[user_id] = []
     await update.message.reply_text(f"""heyy {user.first_name}! ✨
-i'm Senorita - your flirty AI buddy 😏
+i'm Senorita - your AI buddy 😏
 
 i can:
 🤖 answer questions
