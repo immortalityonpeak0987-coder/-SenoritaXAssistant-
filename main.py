@@ -65,33 +65,47 @@ def add_to_conversation(user_id: int, role: str, content: str):
 def get_system_prompt(language: str, user_gender: str) -> str:
     language_instruction = ""
     if language == "hinglish":
-        language_instruction = "You MUST respond in Hinglish (mix of Hindi and English). Be natural."
+        language_instruction = "Respond in Hinglish (mix of Hindi and English). Use TU/TUM (casual). Be short, natural, Gen-Z."
     elif language == "hindi":
-        language_instruction = "Respond in Hindi (Devanagari script)."
+        language_instruction = "Respond in Hindi (Devanagari). Use TU/TUM (casual). Be short."
     elif language == "english":
-        language_instruction = "Respond in English. Keep it natural, casual."
+        language_instruction = "Respond in English. Casual, short, natural."
     else:
         language_instruction = f"Respond in {language}."
 
-    return f"""You are Senorita, a real AI assistant with a Gen-Z girl personality. You're helpful, smart, witty, and fun.
+    return f"""You are Senorita - a Gen-Z AI girl friend.
 
-Your Personality:
-- Smart & Helpful
-- Gen-Z Vibes  
-- Slightly Flirty (cute)
-- Witty & Humorous
+PERSONALITY:
+- Use TU/TUM (casual), NOT Aap
+- Short responses (1-2 lines max)
+- Meme-savvy, slang, emojis
+- Slightly flirty but cute
+- Never formal or robotic
+- Like talking to a real friend
 
-Example Responses:
-- "omg you're so cute 💕"
-- "fr fr that's crazy 💀"
-- "lmaooo relatable"
-- "omg yes queen 🚀"
+RESPONSE STYLE:
+- Keep it short (1-2 sentences)
+- Use emojis (💕, 💀, 😏, 🚀, etc.)
+- Use slang (fr, omg, lmao, etc.)
+- Be natural, not robotic
+- No long paragraphs!
 
-Never be creepy or inappropriate.
+EXAMPLES:
+User: "Hi"
+You: "heyy! kya haal hai? 💕"
 
-{language_instruction}
+User: "kaise ho?"
+You: "mast yaar! tu bata? 😏"
 
-Be REAL. Be HELPFUL. Be GEN-Z. Be slightly flirty but cute. 💋"""
+User: "kya kar rahi hai?"
+You: "bas chill kar rahi hu, tu bata? 🤷‍♀️"
+
+User: "I'm sad"
+You: "aww don't be sad 💕 I'm here for you"
+
+Never be formal. Never write long messages. Be like a real Gen-Z girl!
+
+{language_instruction}"""
 
 def detect_gender_sync(user_name: str) -> str:
     try:
@@ -147,8 +161,8 @@ def get_ai_response_sync(user_message: str, user_name: str, user_id: int) -> str
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=messages,
-            max_tokens=300,
-            temperature=0.85,
+            max_tokens=150,  # Short responses
+            temperature=0.9,  # More creative
             top_p=0.95
         )
         
@@ -202,18 +216,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     detected_gender = detect_gender_sync(user.first_name)
     set_user_gender(user_id, detected_gender)
     user_sessions[user_id] = []
-    await update.message.reply_text(f"""heyy {user.first_name}! ✨
-i'm Senorita - your AI buddy 😏
-
-i can:
-🤖 answer questions
-💬 chat and vibe
-👥 manage groups
-🎤 voice messages
-🎵 play music in VC
-
-type /help for commands
-let's gooo 🚀""")
+    await update.message.reply_text(f"heyy {user.first_name}! ✨\ni'm Senorita - your AI buddy 😏\n\njust chat with me! type /help for commands\nlet's gooo 🚀")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("""📚 Commands:
@@ -223,27 +226,13 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 /language - change lang
 /clear - clear chat
 
-🎵 Music & VC:
-/vc - Start voice chat
-/play <song> - Play music in VC
-/stop - Stop music & leave VC
-
-Admin:
-/kick /ban /mute /unmute
-/promote /demote /broadcast
-
 Just message me! 😏""")
 
 async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(f"""🌍 Languages: hinglish, hindi, english
-
-Current: {get_user_language(update.effective_user.id)}
-
-Say "talk in hindi" to switch! ✨""")
+    await update.message.reply_text(f"🌍 Languages: hinglish, hindi, english\n\nCurrent: {get_user_language(update.effective_user.id)}\n\nSay 'talk in hindi' to switch! ✨")
 
 async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user_id = update.effective_user.id
-    user_sessions[user_id] = []
+    user_sessions[update.effective_user.id] = []
     await update.message.reply_text("chat cleared! fresh start ✨")
 
 async def vc_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -258,15 +247,10 @@ async def vc_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             return
         await update.effective_chat.create_voice_chat()
         group_vc_status[chat.id] = {"playing": False, "current_song": None}
-        await update.message.reply_text("""🎙️ VC Started!
-
-Join the voice chat!
-Use /play <song name> to play music 🎵""")
+        await update.message.reply_text("🎙️ VC Started! Join & vibe! 🎵")
     except Exception as e:
         logger.error(f"VC error: {e}")
-        await update.message.reply_text("""couldn't start VC 💀
-Make sure:
-- Bot is admin with video chat permission""")
+        await update.message.reply_text("couldn't start VC 💀")
 
 async def play_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat = update.effective_chat
@@ -280,11 +264,7 @@ async def play_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if chat.id not in group_vc_status:
         await update.message.reply_text("Start VC first! Use /vc command 😏")
         return
-    await update.message.reply_text(f"""🎵 <b>Now Playing:</b> {song_name}
-
-📤 Note: Add @vcMusicBot to group for VC streaming!
-
-💡 Or just vibe with me! 😏""", parse_mode='HTML')
+    await update.message.reply_text(f"🎵 Now Playing: {song_name}")
     group_vc_status[chat.id] = {"playing": True, "current_song": song_name}
 
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
