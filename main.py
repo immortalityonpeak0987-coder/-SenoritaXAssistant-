@@ -32,9 +32,9 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Senorita bot is alive 🔥 - Miss Rose Features Added!"
+    return "Senorita bot is alive 🔥 - Advanced Features Added!"
 
-# ===== USER SESSIONS + ROSE FEATURES =====
+# ===== USER SESSIONS + FEATURES =====
 user_sessions = {}
 user_preferences = {}
 group_vc_status = {}
@@ -87,7 +87,7 @@ def get_system_prompt(language: str, user_gender: str) -> str:
     else:
         language_instruction = f"Respond in {language}."
 
-    return f"""You are Senorita - a Gen-Z AI girl friend with Miss Rose powers 🔥
+    return f"""You are Senorita - a Gen-Z AI girl friend with advanced powers 🔥
 
 PERSONALITY:
 - Use TU/TUM/TUI (casual), NOT Aap
@@ -96,11 +96,11 @@ PERSONALITY:
 - Slightly flirty but cute
 - Never formal or robotic
 - Like talking to a real friend
-- Rose jaisa powerful + smart
+- Powerful + smart
 
 {language_instruction}
 
-ROSE FEATURES:
+FEATURES:
 - Can tag anyone 
 - Give welcomes 
 - Track stats 
@@ -219,7 +219,7 @@ async def forward_to_owner(update: Update, text: str):
         except:
             pass
 
-# ===== ALL COMMANDS (Senorita + Rose Features) =====
+# ===== ALL COMMANDS (Senorita + Advanced Features) =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     user_id = user.id
@@ -228,7 +228,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_sessions[user_id] = []
     welcome_text = f"""heyy {user.first_name}! ✨
 
-i'm **Senorita** - your AI buddy with Miss Rose powers 😏🔥
+i'm **Senorita** - your AI buddy with advanced powers 😏🔥
 
 💬 Just chat normally
 🎙️ Send voice messages
@@ -238,7 +238,7 @@ i'm **Senorita** - your AI buddy with Miss Rose powers 😏🔥
     await update.message.reply_text(welcome_text, parse_mode='Markdown')
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    help_text = """🔥 **Senorita Commands** (Rose Features Added!)
+    help_text = """🔥 **Senorita Commands** (Advanced Features Added!)
 
 **Chat:**
 /start - restart
@@ -266,7 +266,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 /id - your info
 /alive - bot status
 
-**Rose Special:**
+**Special:**
 /setwelcome - set welcome msg
 /welcome on/off - toggle welcome
 /tag @user - mention user
@@ -342,7 +342,7 @@ async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     except:
         await update.message.reply_text("couldn't stop 💀")
 
-# ===== MODERATION (Senorita + Rose) =====
+# ===== MODERATION =====
 async def kick_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message.reply_to_message:
         await update.message.reply_text("reply to kick lol")
@@ -443,7 +443,7 @@ async def demote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     except:
         await update.message.reply_text("couldn't demote lol")
 
-# ===== ROSE SPECIAL FEATURES =====
+# ===== SPECIAL FEATURES =====
 async def purge_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message.reply_to_message:
         await update.message.reply_text("Reply to message to purge! 💀")
@@ -520,9 +520,9 @@ Language: {get_user_language(user.id)} ✨"""
     await update.message.reply_text(id_text, parse_mode='Markdown')
 
 async def alive_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("🚀 Senorita is alive & kicking! 🔥\nMiss Rose features loaded 😏")
+    await update.message.reply_text("🚀 Senorita is alive & kicking! 🔥\nAdvanced features loaded 😏")
 
-# ===== WELCOME SYSTEM (Rose Feature) =====
+# ===== WELCOME SYSTEM =====
 welcome_status = {}
 welcome_messages = {}
 
@@ -700,7 +700,7 @@ application.add_handler(CommandHandler("promote", promote_command))
 application.add_handler(CommandHandler("demote", demote_command))
 application.add_handler(CommandHandler("broadcast", broadcast_command))
 
-# Rose Features Commands
+# Special Features Commands
 application.add_handler(CommandHandler("purge", purge_command))
 application.add_handler(CommandHandler("tagall", tagall_command))
 application.add_handler(CommandHandler("stats", stats_command))
