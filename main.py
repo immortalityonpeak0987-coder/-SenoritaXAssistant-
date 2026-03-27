@@ -4,8 +4,8 @@ import asyncio
 import re
 import random
 from flask import Flask
-from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
+from telegram import Update, ChatPermissions
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from groq import Groq
 import speech_recognition as sr
 from pydub import AudioSegment
@@ -32,14 +32,13 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Senorita bot is alive 🔥 - Advanced Features Added!"
+    return "Senorita bot is alive 🔥 - Advanced Features!"
 
-# ===== USER SESSIONS + FEATURES =====
+# ===== USER SESSIONS =====
 user_sessions = {}
 user_preferences = {}
-group_vc_status = {}
-user_requests = defaultdict(list)  # Rate limiting
-chat_stats = defaultdict(lambda: {"msgs": 0, "users": set()})  # Stats
+user_requests = defaultdict(list)
+chat_stats = defaultdict(lambda: {"msgs": 0, "users": set()})
 
 def get_user_language(user_id: int) -> str:
     return user_preferences.get(user_id, {}).get("language", "hinglish")
@@ -66,10 +65,9 @@ def add_to_conversation(user_id: int, role: str, content: str):
     if user_id not in user_sessions:
         user_sessions[user_id] = []
     user_sessions[user_id].append({"role": role, "content": content})
-    if len(user_sessions[user_id]) > 15:  # Increased limit
+    if len(user_sessions[user_id]) > 15:
         user_sessions[user_id] = user_sessions[user_id][-15:]
 
-# ===== ENHANCED SYSTEM PROMPT WITH NEW LANGUAGES =====
 def get_system_prompt(language: str, user_gender: str) -> str:
     language_instruction = ""
     if language == "hinglish":
@@ -96,7 +94,6 @@ PERSONALITY:
 - Slightly flirty but cute
 - Never formal or robotic
 - Like talking to a real friend
-- Powerful + smart
 
 {language_instruction}
 
@@ -219,7 +216,7 @@ async def forward_to_owner(update: Update, text: str):
         except:
             pass
 
-# ===== ALL COMMANDS (Senorita + Advanced Features) =====
+# ===== COMMANDS =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     user_id = user.id
@@ -238,21 +235,17 @@ i'm **Senorita** - your AI buddy with advanced powers 😏🔥
     await update.message.reply_text(welcome_text, parse_mode='Markdown')
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    help_text = """🔥 **Senorita Commands** (Advanced Features Added!)
+    help_text = """🔥 **Senorita Commands** (Advanced Features!)
 
 **Chat:**
 /start - restart
 /language - change lang  
 /clear - clear chat
 
-**Voice Chat (Groups):**
-/vc - start VC
-/play songname - play music
-/stop - stop VC
-
 **Moderation (Admins):**
 /kick - kick user (reply)
 /ban - ban user (reply) 
+/unban - unban user (reply)
 /mute - mute user (reply)
 /unmute - unmute (reply)
 /promote - make admin (reply)
@@ -266,10 +259,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 /id - your info
 /alive - bot status
 
-**Special:**
+**Welcome:**
 /setwelcome - set welcome msg
 /welcome on/off - toggle welcome
-/tag @user - mention user
 
 Just message me naturally! 😏💕"""
     await update.message.reply_text(help_text, parse_mode='Markdown')
@@ -293,170 +285,144 @@ async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     user_sessions[update.effective_user.id] = []
     await update.message.reply_text("chat cleared! fresh start ✨")
 
-# ===== VC COMMANDS (unchanged) =====
-async def vc_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    chat = update.effective_chat
-    if chat.type == 'private':
-        await update.message.reply_text("groups only baby! 😏")
-        return
-    try:
-        chat_member = await update.effective_chat.get_member(update.effective_user.id)
-        if chat_member.status not in ['administrator', 'creator']:
-            await update.message.reply_text("admins only! 😤")
-            return
-        await update.effective_chat.create_voice_chat()
-        group_vc_status[chat.id] = {"playing": False, "current_song": None}
-        await update.message.reply_text("🎙️ VC Started! Join & vibe! 🎵")
-    except Exception as e:
-        await update.message.reply_text("couldn't start VC 💀")
-
-async def play_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    chat = update.effective_chat
-    if chat.type == 'private':
-        await update.message.reply_text("groups only! 😏")
-        return
-    if not context.args:
-        await update.message.reply_text("Give song name! 😤\n/play Tum Hi Ho")
-        return
-    song_name = " ".join(context.args)
-    if chat.id not in group_vc_status:
-        await update.message.reply_text("Start VC first! Use /vc 😏")
-        return
-    await update.message.reply_text(f"🎵 Now Playing: {song_name}")
-    group_vc_status[chat.id] = {"playing": True, "current_song": song_name}
-
-async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    chat = update.effective_chat
-    if chat.type == 'private':
-        await update.message.reply_text("groups only! 😏")
-        return
-    try:
-        chat_member = await update.effective_chat.get_member(update.effective_user.id)
-        if chat_member.status not in ['administrator', 'creator']:
-            await update.message.reply_text("admins only! 😤")
-            return
-        await update.effective_chat.delete_voice_chat()
-        await update.message.reply_text("🎵 Music stopped! VC closed 👋")
-        if chat.id in group_vc_status:
-            del group_vc_status[chat.id]
-    except:
-        await update.message.reply_text("couldn't stop 💀")
-
-# ===== MODERATION =====
+# ===== MODERATION COMMANDS =====
 async def kick_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message.reply_to_message:
-        await update.message.reply_text("reply to kick lol")
+        await update.message.reply_text("reply to kick!")
         return
     try:
         chat_member = await update.effective_chat.get_member(update.effective_user.id)
         if chat_member.status not in ['administrator', 'creator']:
-            await update.message.reply_text("admins only lol")
+            await update.message.reply_text("admins only!")
             return
         user_to_kick = update.message.reply_to_message.from_user
         await update.effective_chat.ban_member(user_to_kick.id)
         await update.effective_chat.unban_member(user_to_kick.id)
-        await update.message.reply_text(f"bye {user_to_kick.first_name}! 👋")
+        await update.message.reply_text(f"👋 {user_to_kick.first_name} kicked!")
     except:
-        await update.message.reply_text("couldn't kick lol")
+        await update.message.reply_text("couldn't kick!")
 
 async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message.reply_to_message:
-        await update.message.reply_text("reply to ban lol")
+        await update.message.reply_text("reply to ban!")
         return
     try:
         chat_member = await update.effective_chat.get_member(update.effective_user.id)
         if chat_member.status not in ['administrator', 'creator']:
-            await update.message.reply_text("admins only lol")
+            await update.message.reply_text("admins only!")
             return
         user_to_ban = update.message.reply_to_message.from_user
         target_member = await update.effective_chat.get_member(user_to_ban.id)
         if target_member.status in ['administrator', 'creator']:
-            await update.message.reply_text("can't ban admins lol")
+            await update.message.reply_text("can't ban admins!")
             return
         await update.effective_chat.ban_member(user_to_ban.id)
-        await update.message.reply_text(f"banned {user_to_ban.first_name} 🔨")
+        await update.message.reply_text(f"🔨 {user_to_ban.first_name} banned!")
     except:
-        await update.message.reply_text("couldn't ban lol")
+        await update.message.reply_text("couldn't ban!")
+
+async def unban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message.reply_to_message:
+        await update.message.reply_text("reply to unban!")
+        return
+    try:
+        chat_member = await update.effective_chat.get_member(update.effective_user.id)
+        if chat_member.status not in ['administrator', 'creator']:
+            await update.message.reply_text("admins only!")
+            return
+        user_to_unban = update.message.reply_to_message.from_user
+        await update.effective_chat.unban_member(user_to_unban.id, only_if_banned=True)
+        await update.message.reply_text(f"✅ {user_to_unban.first_name} unbanned!")
+    except:
+        await update.message.reply_text("couldn't unban!")
 
 async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message.reply_to_message:
-        await update.message.reply_text("reply to mute lol")
+        await update.message.reply_text("reply to mute!")
         return
     try:
         chat_member = await update.effective_chat.get_member(update.effective_user.id)
         if chat_member.status not in ['administrator', 'creator']:
-            await update.message.reply_text("admins only lol")
+            await update.message.reply_text("admins only!")
             return
         user_to_mute = update.message.reply_to_message.from_user
         await update.effective_chat.restrict_member(user_to_mute.id, ChatPermissions(can_send_messages=False))
-        await update.message.reply_text(f"shhh {user_to_mute.first_name} 🤫")
+        await update.message.reply_text(f"🤫 {user_to_mute.first_name} muted!")
     except:
-        await update.message.reply_text("couldn't mute lol")
+        await update.message.reply_text("couldn't mute!")
 
 async def unmute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message.reply_to_message:
-        await update.message.reply_text("reply to unmute lol")
+        await update.message.reply_text("reply to unmute!")
         return
     try:
         chat_member = await update.effective_chat.get_member(update.effective_user.id)
         if chat_member.status not in ['administrator', 'creator']:
-            await update.message.reply_text("admins only lol")
+            await update.message.reply_text("admins only!")
             return
         user_to_unmute = update.message.reply_to_message.from_user
-        await update.effective_chat.restrict_member(user_to_unmute.id, ChatPermissions(
-            can_send_messages=True, can_send_media_messages=True, 
-            can_send_other_messages=True, can_add_web_page_previews=True
-        ))
-        await update.message.reply_text(f"welcome back {user_to_unmute.first_name}! 🔊")
-    except:
-        await update.message.reply_text("couldn't unmute lol")
+        permissions = ChatPermissions(
+            can_send_messages=True,
+            can_send_media_messages=True,
+            can_send_polls=True,
+            can_send_other_messages=True,
+            can_add_web_page_previews=True,
+            can_change_info=False,
+            can_invite_users=True,
+            can_pin_messages=False
+        )
+        await update.effective_chat.restrict_member(user_to_unmute.id, permissions)
+        await update.message.reply_text(f"🔊 {user_to_unmute.first_name} unmuted!")
+    except Exception as e:
+        logger.error(f"Unmute error: {e}")
+        await update.message.reply_text("couldn't unmute!")
 
 async def promote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message.reply_to_message:
-        await update.message.reply_text("reply to promote lol")
+        await update.message.reply_text("reply to promote!")
         return
     try:
         chat_member = await update.effective_chat.get_member(update.effective_user.id)
         if chat_member.status not in ['administrator', 'creator']:
-            await update.message.reply_text("admins only lol")
+            await update.message.reply_text("admins only!")
             return
         user_to_promote = update.message.reply_to_message.from_user
         await update.effective_chat.promote_member(user_to_promote.id, 
             can_change_info=True, can_delete_messages=True, can_restrict_members=True)
-        await update.message.reply_text(f"{user_to_promote.first_name} is now admin! 🎉")
+        await update.message.reply_text(f"🎉 {user_to_promote.first_name} is now admin!")
     except:
-        await update.message.reply_text("couldn't promote lol")
+        await update.message.reply_text("couldn't promote!")
 
 async def demote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message.reply_to_message:
-        await update.message.reply_text("reply to demote lol")
+        await update.message.reply_text("reply to demote!")
         return
     try:
         chat_member = await update.effective_chat.get_member(update.effective_user.id)
         if chat_member.status not in ['administrator', 'creator']:
-            await update.message.reply_text("admins only lol")
+            await update.message.reply_text("admins only!")
             return
         user_to_demote = update.message.reply_to_message.from_user
         await update.effective_chat.promote_member(user_to_demote.id, 
             can_change_info=False, can_delete_messages=False, can_restrict_members=False)
-        await update.message.reply_text(f"{user_to_demote.first_name} is no longer admin 👋")
+        await update.message.reply_text(f"👋 {user_to_demote.first_name} is no longer admin!")
     except:
-        await update.message.reply_text("couldn't demote lol")
+        await update.message.reply_text("couldn't demote!")
 
 # ===== SPECIAL FEATURES =====
 async def purge_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message.reply_to_message:
-        await update.message.reply_text("Reply to message to purge! 💀")
+        await update.message.reply_text("Reply to message to purge!")
         return
     try:
         chat_member = await update.effective_chat.get_member(update.effective_user.id)
         if chat_member.status not in ['administrator', 'creator']:
-            await update.message.reply_text("Admins only! 😤")
+            await update.message.reply_text("Admins only!")
             return
         
         message_id = update.message.reply_to_message.message_id
         deleted_count = 0
-        for i in range(10):  # Delete last 10 messages
+        for i in range(10):
             try:
                 await update.effective_chat.delete_message(message_id - i)
                 deleted_count += 1
@@ -465,32 +431,39 @@ async def purge_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         
         await update.message.reply_text(f"🗑️ Purged {deleted_count} messages!")
     except:
-        await update.message.reply_text("Purge failed! 💀")
+        await update.message.reply_text("Purge failed!")
 
 async def tagall_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat = update.effective_chat
     if chat.type == 'private':
-        await update.message.reply_text("Groups only! 😏")
+        await update.message.reply_text("Groups only!")
         return
     
     try:
         chat_member = await chat.get_member(update.effective_user.id)
         if chat_member.status not in ['administrator', 'creator']:
-            await update.message.reply_text("Admins only! 😤")
+            await update.message.reply_text("Admins only!")
             return
         
         members = []
         async for member in chat.get_members():
-            if not member.user.is_bot and member.status in ['member', 'administrator']:
+            if not member.user.is_bot and member.status == 'member':
                 members.append(member.user.mention_html())
         
-        if members:
-            tag_text = "👥 " + " ".join(members[:50])  # Limit to 50
+        if not members:
+            await update.message.reply_text("No members to tag!")
+            return
+        
+        chunk_size = 20
+        for i in range(0, len(members), chunk_size):
+            chunk = members[i:i+chunk_size]
+            tag_text = "👥 " + " ".join(chunk)
             await update.message.reply_text(tag_text, parse_mode='HTML')
-        else:
-            await update.message.reply_text("No members to tag! 💀")
-    except:
-        await update.message.reply_text("Tagall failed! 💀")
+            await asyncio.sleep(1)
+            
+    except Exception as e:
+        logger.error(f"Tagall error: {e}")
+        await update.message.reply_text("Tagall failed!")
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
@@ -602,16 +575,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if message.chat.type == 'private' and OWNER_ID:
         await forward_to_owner(update, message.text)
     
-    # Welcome system
-    if message.new_chat_members and chat_id in welcome_status and welcome_status[chat_id]:
-        for new_member in message.new_chat_members:
-            if new_member.id != (await context.bot.get_me()).id:
-                welcome_msg = welcome_messages.get(chat_id, "Welcome {user} to {chat}! 🎉")
-                welcome_msg = welcome_msg.format(user=new_member.mention_html(), chat=message.chat.title)
-                try:
-                    await message.reply_text(welcome_msg, parse_mode='HTML')
-                except:
-                    pass
+    # Welcome system - FIXED
+    if message.new_chat_members:
+        chat_id = message.chat_id
+        if chat_id in welcome_status and welcome_status[chat_id]:
+            for new_member in message.new_chat_members:
+                if new_member.id != (await context.bot.get_me()).id:
+                    welcome_msg = welcome_messages.get(chat_id, "Welcome {user} to {chat}! 🎉")
+                    formatted_welcome = welcome_msg.format(
+                        user=new_member.mention_html(), 
+                        chat=message.chat.title or "this group"
+                    )
+                    try:
+                        await message.reply_text(formatted_welcome, parse_mode='HTML')
+                    except:
+                        await message.reply_text(f"Welcome {new_member.first_name} to {message.chat.title or 'this group'}! 🎉")
     
     should_respond = False
     if message.chat.type == 'private':
@@ -641,7 +619,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await add_reaction(update, "🔥")
         await message.reply_text(response)
 
-# ===== FIXED VOICE HANDLER =====
+# ===== VOICE HANDLER =====
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     file_path = None
     try:
@@ -684,23 +662,21 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 # ===== APPLICATION BUILDER =====
 application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
-# All Commands
+# Core Commands
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CommandHandler("help", help_command))
 application.add_handler(CommandHandler("language", language_command))
 application.add_handler(CommandHandler("clear", clear_command))
-application.add_handler(CommandHandler("vc", vc_command))
-application.add_handler(CommandHandler("play", play_command))
-application.add_handler(CommandHandler("stop", stop_command))
 application.add_handler(CommandHandler("kick", kick_command))
 application.add_handler(CommandHandler("ban", ban_command))
+application.add_handler(CommandHandler("unban", unban_command))
 application.add_handler(CommandHandler("mute", mute_command))
 application.add_handler(CommandHandler("unmute", unmute_command))
 application.add_handler(CommandHandler("promote", promote_command))
 application.add_handler(CommandHandler("demote", demote_command))
 application.add_handler(CommandHandler("broadcast", broadcast_command))
 
-# Special Features Commands
+# Special Features
 application.add_handler(CommandHandler("purge", purge_command))
 application.add_handler(CommandHandler("tagall", tagall_command))
 application.add_handler(CommandHandler("stats", stats_command))
@@ -713,14 +689,13 @@ application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_m
 application.add_handler(MessageHandler(filters.VOICE, handle_voice))
 application.add_error_handler(error_handler)
 
-# ===== RENDER READY RUN SECTION =====
+# ===== RUN =====
 if __name__ == "__main__":
     import nest_asyncio
     nest_asyncio.apply()
     
     port = int(os.environ.get("PORT", 10000))
     
-    # Start Flask in background
     from threading import Thread
     def run_flask():
         app.run(host="0.0.0.0", port=port, debug=False)
@@ -732,7 +707,6 @@ if __name__ == "__main__":
     print("🌐 Flask running on port", port)
     print("🚀 Senorita Bot Starting...")
     
-    # Start Telegram Bot
     application.run_polling(
         allowed_updates=Update.ALL_TYPES,
         drop_pending_updates=True,
