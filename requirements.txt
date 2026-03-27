@@ -1,6 +1,9 @@
 python-telegram-bot==21.0
 Flask==3.0.0
 groq
-gtts
-speechrecognition
-pydub
+gTTS==4.5.0
+SpeechRecognition==3.10.4
+pydub==0.25.1
+gunicorn==21.2.0
+python-dotenv==1.0.0
+requests==2.31.0
