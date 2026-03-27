@@ -713,27 +713,28 @@ application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_m
 application.add_handler(MessageHandler(filters.VOICE, handle_voice))
 application.add_error_handler(error_handler)
 
-# ===== RUN =====
+# ===== RENDER READY RUN SECTION =====
 if __name__ == "__main__":
-    asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
+    import nest_asyncio
+    nest_asyncio.apply()
     
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    port = int(os.environ.get("PORT", 10000))
     
-    try:
-        from threading import Thread
-        flask_thread = Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)), debug=False, use_reloader=False))
-        flask_thread.daemon = True
-        flask_thread.start()
-        
-        logger.info("🚀 Starting Ultimate Senorita Bot (Rose Features Added)!")
-        logger.info("🤖 Bot is running! Send /start")
-        
-        loop.run_until_complete(application.run_polling(
-            allowed_updates=Update.ALL_TYPES,
-            drop_pending_updates=True
-        ))
-    except KeyboardInterrupt:
-        logger.info("Bot stopped by user")
-    finally:
-        loop.close()
+    # Start Flask in background
+    from threading import Thread
+    def run_flask():
+        app.run(host="0.0.0.0", port=port, debug=False)
+    
+    flask_thread = Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
+    
+    print("🌐 Flask running on port", port)
+    print("🚀 Senorita Bot Starting...")
+    
+    # Start Telegram Bot
+    application.run_polling(
+        allowed_updates=Update.ALL_TYPES,
+        drop_pending_updates=True,
+        poll_interval=1.0
+    )
