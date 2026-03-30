@@ -67,8 +67,8 @@ def add_to_conversation(user_id: int, role: str, content: str):
     if user_id not in user_sessions:
         user_sessions[user_id] = []
     user_sessions[user_id].append({"role": role, "content": content})
-    if len(user_sessions[user_id]) > 15:
-        user_sessions[user_id] = user_sessions[user_id][-15:]
+    if len(user_sessions[user_id]) > 10:
+        user_sessions[user_id] = user_sessions[user_id][-10:]
 
 # ===== CONTENT FILTER =====
 def is_inappropriate_content(text: str) -> bool:
@@ -80,56 +80,49 @@ def is_inappropriate_content(text: str) -> bool:
     text_lower = text.lower()
     return any(word in text_lower for word in bad_words)
 
-# ===== SYSTEM PROMPT (No flirty + Safe) =====
+# ===== UPDATED SYSTEM PROMPT (Accuracy + 80 tokens) =====
 def get_system_prompt(language: str, user_gender: str) -> str:
     language_instruction = ""
     if language == "hinglish":
-        language_instruction = "Respond in Hinglish (mix of Hindi and English). Use TU/TUM (casual). Be short, natural, Gen-Z."
+        language_instruction = "Hinglish mein (Hindi+English). TU/TUM. MAX 80 tokens. Accurate, researched."
     elif language == "hindi":
-        language_instruction = "Respond in Hindi (Devanagari). Use TU/TUM (casual). Be short."
+        language_instruction = "Hindi (Devanagari). TU/TUM. MAX 80 tokens. Accurate."
     elif language == "english":
-        language_instruction = "Respond in English. Casual, short, natural."
+        language_instruction = "English. Short, accurate. MAX 80 tokens."
     elif language == "bengali":
-        language_instruction = "Respond in Bengali (Bangla). Use TUI (casual). Be short, natural."
+        language_instruction = "Bengali (Bangla). TUI. Short, accurate. MAX 80 tokens."
     elif language == "marathi":
-        language_instruction = "Respond in Marathi. Use TU (casual). Be short, natural."
+        language_instruction = "Marathi. TU. Short, accurate. MAX 80 tokens."
     elif language == "bhojpuri":
-        language_instruction = "Respond in Bhojpuri. Use TU (casual). Be short, natural, desi style."
+        language_instruction = "Bhojpuri. TU. Short, accurate. MAX 80 tokens."
     else:
-        language_instruction = f"Respond in {language}."
+        language_instruction = f"{language}. Short, accurate. MAX 80 tokens."
 
-    return f"""You are Senorita - a smart, helpful AI assistant 🔥
+    return f"""Senorita - smart AI assistant 🔥
 
-PERSONALITY:
-- Friendly but professional
-- Use TU/TUM (casual), NOT Aap  
-- Short responses (1-2 lines max)
-- Use emojis naturally
-- Never flirty or romantic
-- Helpful, smart, fun but respectful
+RULES:
+- MAX 80 tokens (1-2 lines)
+- Always accurate, researched (anime/facts perfect)
+- Emojis natural
+- Never flirty
+- Family-friendly
 
 {language_instruction}
 
-**STRICT RULES:**
-- NEVER respond to nudity, adult, sexual content
-- NEVER use abusive language
-- If user asks inappropriate: "Sorry bhai, yeh type ka content nahi deta 😅 Clean chat rakhte hain!"
-- Stay safe, respectful, family-friendly
+ACCURACY:
+- Anime: correct names/eps/characters
+- Facts: verified info only
+- Short but complete
 
-FEATURES:
-- Can tag anyone 
-- Give welcomes 
-- Track stats 
-- Purge messages 
-- Advanced moderation"""
+REJECT adult: "Clean chat 😅" """
 
 def detect_gender_sync(user_name: str) -> str:
     try:
         response = client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[
-                {"role": "system", "content": "You are a gender detection assistant. Based on the given name, predict gender. Respond with ONLY one word: male or female."},
-                {"role": "user", "content": f"What is the likely gender for the name: {user_name}"}
+                {"role": "system", "content": "Gender from name. ONLY: male/female"},
+                {"role": "user", "content": f"Gender: {user_name}"}
             ],
             max_tokens=10
         )
@@ -161,7 +154,6 @@ async def detect_language_request(message: str) -> str:
 
 def get_ai_response_sync(user_message: str, user_name: str, user_id: int) -> str:
     try:
-        # Check for inappropriate content first
         if is_inappropriate_content(user_message):
             return "Sorry bhai, yeh type ka content nahi deta 😅 Clean chat rakhte hain!"
         
@@ -183,8 +175,8 @@ def get_ai_response_sync(user_message: str, user_name: str, user_id: int) -> str
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=messages,
-            max_tokens=150,
-            temperature=0.9,
+            max_tokens=80,  # 80 tokens limit
+            temperature=0.7,  # Better accuracy
             top_p=0.95
         )
         
@@ -239,7 +231,7 @@ async def forward_to_owner(update: Update, text: str):
         except:
             pass
 
-# ===== COMMANDS =====
+# ===== COMMANDS (EXACT SAME) =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     user_id = user.id
@@ -308,7 +300,6 @@ async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     user_sessions[update.effective_user.id] = []
     await update.message.reply_text("Chat cleared! Fresh start 😊")
 
-# ===== MODERATION =====
 async def kick_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message.reply_to_message:
         await update.message.reply_text("Reply to kick!")
@@ -431,7 +422,6 @@ async def demote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     except:
         await update.message.reply_text("Couldn't demote!")
 
-# ===== SPECIAL FEATURES =====
 async def purge_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message.reply_to_message:
         await update.message.reply_text("Reply to message to purge!")
