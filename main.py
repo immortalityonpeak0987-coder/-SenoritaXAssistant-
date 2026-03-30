@@ -39,8 +39,6 @@ user_sessions = {}
 user_preferences = {}
 user_requests = defaultdict(list)
 chat_stats = defaultdict(lambda: {"msgs": 0, "users": set()})
-welcome_status = {}
-welcome_messages = {}
 
 def get_user_language(user_id: int) -> str:
     return user_preferences.get(user_id, {}).get("language", "hinglish")
@@ -67,62 +65,52 @@ def add_to_conversation(user_id: int, role: str, content: str):
     if user_id not in user_sessions:
         user_sessions[user_id] = []
     user_sessions[user_id].append({"role": role, "content": content})
-    if len(user_sessions[user_id]) > 10:
-        user_sessions[user_id] = user_sessions[user_id][-10:]
+    if len(user_sessions[user_id]) > 15:
+        user_sessions[user_id] = user_sessions[user_id][-15:]
 
-# ===== CONTENT FILTER =====
-def is_inappropriate_content(text: str) -> bool:
-    bad_words = [
-        'sex', 'nude', 'porn', 'chudai', 'fuck', 'chut', 'land', 'bhosdi', 
-        'madarchod', 'randi', 'behenchod', 'xxx', 'rape', 'breasts', 'penis',
-        'लंड', 'चूत', 'चुदाई', 'मादरचोद', 'भोसड़ी'
-    ]
-    text_lower = text.lower()
-    return any(word in text_lower for word in bad_words)
-
-# ===== UPDATED SYSTEM PROMPT (Accuracy + 80 tokens) =====
 def get_system_prompt(language: str, user_gender: str) -> str:
     language_instruction = ""
     if language == "hinglish":
-        language_instruction = "Hinglish mein (Hindi+English). TU/TUM. MAX 80 tokens. Accurate, researched."
+        language_instruction = "Respond in Hinglish (mix of Hindi and English). Use TU/TUM (casual). Be short, natural, Gen-Z."
     elif language == "hindi":
-        language_instruction = "Hindi (Devanagari). TU/TUM. MAX 80 tokens. Accurate."
+        language_instruction = "Respond in Hindi (Devanagari). Use TU/TUM (casual). Be short."
     elif language == "english":
-        language_instruction = "English. Short, accurate. MAX 80 tokens."
+        language_instruction = "Respond in English. Casual, short, natural."
     elif language == "bengali":
-        language_instruction = "Bengali (Bangla). TUI. Short, accurate. MAX 80 tokens."
+        language_instruction = "Respond in Bengali (Bangla). Use TUI (casual). Be short, natural."
     elif language == "marathi":
-        language_instruction = "Marathi. TU. Short, accurate. MAX 80 tokens."
+        language_instruction = "Respond in Marathi. Use TU (casual). Be short, natural."
     elif language == "bhojpuri":
-        language_instruction = "Bhojpuri. TU. Short, accurate. MAX 80 tokens."
+        language_instruction = "Respond in Bhojpuri. Use TU (casual). Be short, natural, desi style."
     else:
-        language_instruction = f"{language}. Short, accurate. MAX 80 tokens."
+        language_instruction = f"Respond in {language}."
 
-    return f"""Senorita - smart AI assistant 🔥
+    return f"""You are Senorita - a Gen-Z AI girl friend with advanced powers 🔥
 
-RULES:
-- MAX 80 tokens (1-2 lines)
-- Always accurate, researched (anime/facts perfect)
-- Emojis natural
-- Never flirty
-- Family-friendly
+PERSONALITY:
+- Use TU/TUM/TUI (casual), NOT Aap
+- Short responses (1-2 lines max)
+- Meme-savvy, slang, emojis
+- Slightly flirty but cute
+- Never formal or robotic
+- Like talking to a real friend
 
 {language_instruction}
 
-ACCURACY:
-- Anime: correct names/eps/characters
-- Facts: verified info only
-- Short but complete
-
-REJECT adult: "Clean chat 😅" """
+FEATURES:
+- Can tag anyone 
+- Give welcomes 
+- Track stats 
+- Purge messages 
+- Advanced moderation"""
 
 def detect_gender_sync(user_name: str) -> str:
     try:
         response = client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[
-                {"role": "system", "content": "Gender from name. ONLY: male/female"},
-                {"role": "user", "content": f"Gender: {user_name}"}
+                {"role": "system", "content": "You are a gender detection assistant. Based on the given name, predict gender. Respond with ONLY one word: male or female."},
+                {"role": "user", "content": f"What is the likely gender for the name: {user_name}"}
             ],
             max_tokens=10
         )
@@ -154,9 +142,6 @@ async def detect_language_request(message: str) -> str:
 
 def get_ai_response_sync(user_message: str, user_name: str, user_id: int) -> str:
     try:
-        if is_inappropriate_content(user_message):
-            return "Sorry bhai, yeh type ka content nahi deta 😅 Clean chat rakhte hain!"
-        
         user_gender = get_user_gender(user_id)
         if user_gender == "unknown":
             detected_gender = detect_gender_sync(user_name)
@@ -175,19 +160,19 @@ def get_ai_response_sync(user_message: str, user_name: str, user_id: int) -> str
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=messages,
-            max_tokens=80,  # 80 tokens limit
-            temperature=0.7,  # Better accuracy
+            max_tokens=150,
+            temperature=0.9,
             top_p=0.95
         )
         
-        ai_response = response.choices[0].message.content or "Samajh gaya bhai! 😊"
+        ai_response = response.choices[0].message.content or "haha fr 💀"
         add_to_conversation(user_id, "user", user_message)
         add_to_conversation(user_id, "assistant", ai_response)
         return ai_response
         
     except Exception as e:
         logger.error(f"AI Error: {str(e)}")
-        return "Kuch gadbad ho gaya 💀 Try again!"
+        return "wait what?? something glitched 💀 try again"
 
 async def transcribe_voice(file_path: str) -> str:
     recognizer = sr.Recognizer()
@@ -231,26 +216,26 @@ async def forward_to_owner(update: Update, text: str):
         except:
             pass
 
-# ===== COMMANDS (EXACT SAME) =====
+# ===== COMMANDS =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     user_id = user.id
     detected_gender = detect_gender_sync(user.first_name)
     set_user_gender(user_id, detected_gender)
     user_sessions[user_id] = []
-    welcome_text = f"""Heyy {user.first_name}! ✨
+    welcome_text = f"""heyy {user.first_name}! ✨
 
-I'm **Senorita** - your smart AI assistant 😊🔥
+i'm **Senorita** - your AI buddy with advanced powers 😏🔥
 
 💬 Just chat normally
-🎙️ Send voice messages  
+🎙️ Send voice messages
 🌍 Languages: hinglish, hindi, english, bengali, marathi, bhojpuri
 
 **/help** for all commands 🚀"""
     await update.message.reply_text(welcome_text, parse_mode='Markdown')
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    help_text = """🔥 **Senorita Commands**
+    help_text = """🔥 **Senorita Commands** (Advanced Features!)
 
 **Chat:**
 /start - restart
@@ -278,7 +263,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 /setwelcome - set welcome msg
 /welcome on/off - toggle welcome
 
-Clean & safe chat! 😊"""
+Just message me naturally! 😏💕"""
     await update.message.reply_text(help_text, parse_mode='Markdown')
 
 async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -287,9 +272,9 @@ async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 - hinglish (default)
 - hindi 
 - english
-- bengali ⭐
-- marathi ⭐  
-- bhojpuri ⭐
+- **bengali** ⭐
+- **marathi** ⭐  
+- **bhojpuri** ⭐
 
 Current: `{current_lang}`
 
@@ -298,81 +283,82 @@ Say: "talk in bengali" to switch! ✨"""
 
 async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_sessions[update.effective_user.id] = []
-    await update.message.reply_text("Chat cleared! Fresh start 😊")
+    await update.message.reply_text("chat cleared! fresh start ✨")
 
+# ===== MODERATION COMMANDS =====
 async def kick_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message.reply_to_message:
-        await update.message.reply_text("Reply to kick!")
+        await update.message.reply_text("reply to kick!")
         return
     try:
         chat_member = await update.effective_chat.get_member(update.effective_user.id)
         if chat_member.status not in ['administrator', 'creator']:
-            await update.message.reply_text("Admins only!")
+            await update.message.reply_text("admins only!")
             return
         user_to_kick = update.message.reply_to_message.from_user
         await update.effective_chat.ban_member(user_to_kick.id)
         await update.effective_chat.unban_member(user_to_kick.id)
         await update.message.reply_text(f"👋 {user_to_kick.first_name} kicked!")
     except:
-        await update.message.reply_text("Couldn't kick!")
+        await update.message.reply_text("couldn't kick!")
 
 async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message.reply_to_message:
-        await update.message.reply_text("Reply to ban!")
+        await update.message.reply_text("reply to ban!")
         return
     try:
         chat_member = await update.effective_chat.get_member(update.effective_user.id)
         if chat_member.status not in ['administrator', 'creator']:
-            await update.message.reply_text("Admins only!")
+            await update.message.reply_text("admins only!")
             return
         user_to_ban = update.message.reply_to_message.from_user
         target_member = await update.effective_chat.get_member(user_to_ban.id)
         if target_member.status in ['administrator', 'creator']:
-            await update.message.reply_text("Can't ban admins!")
+            await update.message.reply_text("can't ban admins!")
             return
         await update.effective_chat.ban_member(user_to_ban.id)
         await update.message.reply_text(f"🔨 {user_to_ban.first_name} banned!")
     except:
-        await update.message.reply_text("Couldn't ban!")
+        await update.message.reply_text("couldn't ban!")
 
 async def unban_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message.reply_to_message:
-        await update.message.reply_text("Reply to unban!")
+        await update.message.reply_text("reply to unban!")
         return
     try:
         chat_member = await update.effective_chat.get_member(update.effective_user.id)
         if chat_member.status not in ['administrator', 'creator']:
-            await update.message.reply_text("Admins only!")
+            await update.message.reply_text("admins only!")
             return
         user_to_unban = update.message.reply_to_message.from_user
         await update.effective_chat.unban_member(user_to_unban.id, only_if_banned=True)
         await update.message.reply_text(f"✅ {user_to_unban.first_name} unbanned!")
     except:
-        await update.message.reply_text("Couldn't unban!")
+        await update.message.reply_text("couldn't unban!")
 
 async def mute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message.reply_to_message:
-        await update.message.reply_text("Reply to mute!")
+        await update.message.reply_text("reply to mute!")
         return
     try:
         chat_member = await update.effective_chat.get_member(update.effective_user.id)
         if chat_member.status not in ['administrator', 'creator']:
-            await update.message.reply_text("Admins only!")
+            await update.message.reply_text("admins only!")
             return
         user_to_mute = update.message.reply_to_message.from_user
         await update.effective_chat.restrict_member(user_to_mute.id, ChatPermissions(can_send_messages=False))
         await update.message.reply_text(f"🤫 {user_to_mute.first_name} muted!")
     except:
-        await update.message.reply_text("Couldn't mute!")
+        await update.message.reply_text("couldn't mute!")
 
 async def unmute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message.reply_to_message:
-        await update.message.reply_text("Reply to unmute!")
+        await update.message.reply_text("reply to unmute!")
         return
     try:
         chat_member = await update.effective_chat.get_member(update.effective_user.id)
         if chat_member.status not in ['administrator', 'creator']:
-            await update.message.reply_text("Admins only!")
+            await update.message.reply_text("admins only!")
             return
         user_to_unmute = update.message.reply_to_message.from_user
         permissions = ChatPermissions(
@@ -387,41 +373,43 @@ async def unmute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
         await update.effective_chat.restrict_member(user_to_unmute.id, permissions)
         await update.message.reply_text(f"🔊 {user_to_unmute.first_name} unmuted!")
-    except:
-        await update.message.reply_text("Couldn't unmute!")
+    except Exception as e:
+        logger.error(f"Unmute error: {e}")
+        await update.message.reply_text("couldn't unmute!")
 
 async def promote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message.reply_to_message:
-        await update.message.reply_text("Reply to promote!")
+        await update.message.reply_text("reply to promote!")
         return
     try:
         chat_member = await update.effective_chat.get_member(update.effective_user.id)
         if chat_member.status not in ['administrator', 'creator']:
-            await update.message.reply_text("Admins only!")
+            await update.message.reply_text("admins only!")
             return
         user_to_promote = update.message.reply_to_message.from_user
         await update.effective_chat.promote_member(user_to_promote.id, 
             can_change_info=True, can_delete_messages=True, can_restrict_members=True)
         await update.message.reply_text(f"🎉 {user_to_promote.first_name} is now admin!")
     except:
-        await update.message.reply_text("Couldn't promote!")
+        await update.message.reply_text("couldn't promote!")
 
 async def demote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message.reply_to_message:
-        await update.message.reply_text("Reply to demote!")
+        await update.message.reply_text("reply to demote!")
         return
     try:
         chat_member = await update.effective_chat.get_member(update.effective_user.id)
         if chat_member.status not in ['administrator', 'creator']:
-            await update.message.reply_text("Admins only!")
+            await update.message.reply_text("admins only!")
             return
         user_to_demote = update.message.reply_to_message.from_user
         await update.effective_chat.promote_member(user_to_demote.id, 
             can_change_info=False, can_delete_messages=False, can_restrict_members=False)
         await update.message.reply_text(f"👋 {user_to_demote.first_name} is no longer admin!")
     except:
-        await update.message.reply_text("Couldn't demote!")
+        await update.message.reply_text("couldn't demote!")
 
+# ===== SPECIAL FEATURES =====
 async def purge_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message.reply_to_message:
         await update.message.reply_text("Reply to message to purge!")
@@ -457,13 +445,8 @@ async def tagall_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await update.message.reply_text("Admins only!")
             return
         
-        member_count = await chat.get_member_count()
-        if member_count <= 1:
-            await update.message.reply_text("No members to tag!")
-            return
-        
         members = []
-        async for member in chat.get_members(count=member_count):
+        async for member in chat.get_members():
             if not member.user.is_bot and member.status == 'member':
                 members.append(member.user.mention_html())
         
@@ -471,16 +454,16 @@ async def tagall_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await update.message.reply_text("No members to tag!")
             return
         
-        chunk_size = 15
+        chunk_size = 20
         for i in range(0, len(members), chunk_size):
             chunk = members[i:i+chunk_size]
-            tag_text = "👥 **ALL MEMBERS:** " + " ".join(chunk)
-            await update.message.reply_text(tag_text, parse_mode='Markdown')
-            await asyncio.sleep(2)
+            tag_text = "👥 " + " ".join(chunk)
+            await update.message.reply_text(tag_text, parse_mode='HTML')
+            await asyncio.sleep(1)
             
     except Exception as e:
         logger.error(f"Tagall error: {e}")
-        await update.message.reply_text("Tagall failed! Try again.")
+        await update.message.reply_text("Tagall failed!")
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
@@ -510,7 +493,11 @@ Language: {get_user_language(user.id)} ✨"""
     await update.message.reply_text(id_text, parse_mode='Markdown')
 
 async def alive_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("🚀 Senorita is alive & kicking! 🔥\nSafe & clean features loaded 😊")
+    await update.message.reply_text("🚀 Senorita is alive & kicking! 🔥\nAdvanced features loaded 😏")
+
+# ===== WELCOME SYSTEM =====
+welcome_status = {}
+welcome_messages = {}
 
 async def setwelcome_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat = update.effective_chat
@@ -546,23 +533,24 @@ async def welcome_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     except:
         pass
 
+# ===== BROADCAST =====
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat = update.effective_chat
     if chat.type == 'private':
-        await update.message.reply_text("Groups only!")
+        await update.message.reply_text("groups only!")
         return
     try:
         chat_member = await chat.get_member(update.effective_user.id)
         if chat_member.status not in ['administrator', 'creator']:
-            await update.message.reply_text("Admins only!")
+            await update.message.reply_text("admins only!")
             return
         if not context.args:
-            await update.message.reply_text("Give message to broadcast!")
+            await update.message.reply_text("give message to broadcast!")
             return
         broadcast_message = " ".join(context.args)
-        await update.message.reply_text(f"📢 **ANNOUNCEMENT:**\n\n{broadcast_message}")
+        await update.message.reply_text(f"📢 ANNOUNCEMENT:\n\n{broadcast_message}")
     except:
-        await update.message.reply_text("Failed!")
+        await update.message.reply_text("failed lol")
 
 # ===== MAIN MESSAGE HANDLER =====
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -587,7 +575,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if message.chat.type == 'private' and OWNER_ID:
         await forward_to_owner(update, message.text)
     
-    # Welcome system
+    # Welcome system - FIXED
     if message.new_chat_members:
         chat_id = message.chat_id
         if chat_id in welcome_status and welcome_status[chat_id]:
@@ -614,7 +602,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         should_respond = True
     
     if should_respond:
-        user_name = message.from_user.first_name or "user"
+        user_name = message.from_user.first_name or "bro"
         if bot_username:
             user_text = message.text.replace(f"@{bot_username}", "").strip()
         else:
@@ -623,12 +611,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         lang_request = await detect_language_request(user_text)
         if lang_request:
             set_user_language(user_id, lang_request)
-            await message.reply_text(f"Switching to {lang_request}! 😊")
+            await message.reply_text(f"aight, switching to {lang_request} ✨")
             return
         
         await context.bot.send_chat_action(chat_id=message.chat_id, action="typing")
         response = get_ai_response_sync(user_text, user_name, user_id)
-        await add_reaction(update, "😊")
+        await add_reaction(update, "🔥")
         await message.reply_text(response)
 
 # ===== VOICE HANDLER =====
@@ -639,7 +627,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             return
             
         if not await rate_limit_check(update.effective_user.id):
-            await update.message.reply_text("Spam mat kar bhai 😅")
+            await update.message.reply_text("Chill kar spam mat kar 😤")
             return
         
         file = await update.message.voice.get_file()
@@ -647,7 +635,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await file.download_to_drive(file_path)
         
         transcribed_text = await transcribe_voice(file_path)
-        user_name = update.effective_user.first_name or "user"
+        user_name = update.effective_user.first_name or "bro"
         user_id = update.effective_user.id
         
         if update.message.chat.type == 'private' and OWNER_ID:
@@ -659,7 +647,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         
     except Exception as e:
         logger.error(f"Voice error: {e}")
-        await update.message.reply_text("Voice processing failed 😅")
+        await update.message.reply_text("voice processing failed lol 💀")
     finally:
         if file_path and os.path.exists(file_path):
             try:
@@ -671,10 +659,10 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error(f"Error: {context.error}")
 
-# ===== APPLICATION =====
+# ===== APPLICATION BUILDER =====
 application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
-# Commands
+# Core Commands
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CommandHandler("help", help_command))
 application.add_handler(CommandHandler("language", language_command))
@@ -687,6 +675,8 @@ application.add_handler(CommandHandler("unmute", unmute_command))
 application.add_handler(CommandHandler("promote", promote_command))
 application.add_handler(CommandHandler("demote", demote_command))
 application.add_handler(CommandHandler("broadcast", broadcast_command))
+
+# Special Features
 application.add_handler(CommandHandler("purge", purge_command))
 application.add_handler(CommandHandler("tagall", tagall_command))
 application.add_handler(CommandHandler("stats", stats_command))
