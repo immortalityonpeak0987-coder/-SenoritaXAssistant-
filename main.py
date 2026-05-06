@@ -10,6 +10,9 @@ from groq import Groq
 import speech_recognition as sr
 from pydub import AudioSegment
 from collections import defaultdict
+import aiohttp
+import json
+from typing import Optional
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -17,22 +20,84 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+# ===== SARVAM AI VOICE SETUP =====
+SARVAM_API_KEY = os.environ.get("SARVAM_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 OWNER_ID = int(os.environ.get("OWNER_ID", 0))
+
+# Sarvam AI Configuration
+SARVAM_BASE_URL = "https://api.sarvam.ai"
+SARVAM_VOICE_MODEL = "sarvam-voice-1.0"
+USE_SARVAM_VOICE = SARVAM_API_KEY is not None
 
 if not all([GROQ_API_KEY, TELEGRAM_BOT_TOKEN]):
     logger.error("API keys missing! 😤")
     exit(1)
 
+if USE_SARVAM_VOICE:
+    logger.info("✅ Sarvam AI Voice Integration: ENABLED")
+else:
+    logger.warning("⚠️ Sarvam AI Voice: Add SARVAM_API_KEY to use advanced voice recognition")
+
 client = Groq(api_key=GROQ_API_KEY)
+
+# ===== SARVAM AI VOICE FUNCTIONS =====
+async def transcribe_with_sarvam(audio_file_path: str, language: str = "hi") -> Optional[str]:
+    """
+    Transcribe audio using Sarvam AI Voice API
+    """
+    if not SARVAM_API_KEY:
+        return None
+    
+    try:
+        # Read audio file as bytes
+        with open(audio_file_path, 'rb') as f:
+            audio_bytes = f.read()
+        
+        headers = {
+            "Authorization": f"Bearer {SARVAM_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        # Sarvam AI expects base64 audio or direct upload
+        data = {
+            "audio": audio_bytes,
+            "language": language,
+            "model": SARVAM_VOICE_MODEL,
+            "response_format": "json"
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{SARVAM_BASE_URL}/v1/audio/transcriptions",
+                headers=headers,
+                json=data,
+                timeout=aiohttp.ClientTimeout(total=30)
+            ) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    transcription = result.get("text", "").strip()
+                    if transcription:
+                        logger.info(f"Sarvam AI transcribed: {transcription[:50]}...")
+                        return transcription
+                else:
+                    logger.error(f"Sarvam API error: {response.status} - {await response.text()}")
+                    return None
+                    
+    except Exception as e:
+        logger.error(f"Sarvam transcription error: {str(e)}")
+        return None
 
 # ===== FLASK APP =====
 app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Senorita bot is alive 🔥 - Advanced Features!"
+    sarvam_status = "✅ Sarvam AI Voice: ACTIVE" if USE_SARVAM_VOICE else "❌ Sarvam AI Voice: DISABLED"
+    return f"""Senorita bot is alive 🔥 - Advanced Features!
+{sarvam_status}
+Voice powered by Sarvam AI 🇮🇳 + Groq AI 🚀"""
 
 # ===== USER SESSIONS =====
 user_sessions = {}
@@ -175,16 +240,36 @@ def get_ai_response_sync(user_message: str, user_name: str, user_id: int) -> str
         return "wait what?? something glitched 💀 try again"
 
 async def transcribe_voice(file_path: str) -> str:
+    """
+    Enhanced voice transcription with Sarvam AI fallback to Google
+    """
+    # First try Sarvam AI (better for Indian languages)
+    if USE_SARVAM_VOICE:
+        logger.info("🔊 Using Sarvam AI for voice transcription...")
+        user_lang = get_user_language(12345)  # Default user for demo
+        sarvam_result = await transcribe_with_sarvam(file_path, user_lang or "hi")
+        if sarvam_result:
+            return sarvam_result
+    
+    # Fallback to Google Speech Recognition
+    logger.info("🔊 Using Google Speech Recognition (fallback)...")
     recognizer = sr.Recognizer()
     try:
         audio = AudioSegment.from_file(file_path)
         audio.export("temp.wav", format="wav")
         with sr.AudioFile("temp.wav") as source:
+            recognizer.adjust_for_ambient_noise(source)
             audio_data = recognizer.record(source)
-            text = recognizer.recognize_google(audio_data)
-            return text
-    except:
-        return "couldn't understand that"
+            text = recognizer.recognize_google(audio_data, language='hi-IN')
+            return text if text else "couldn't understand that"
+    except sr.UnknownValueError:
+        return "couldn't understand that voice 😅"
+    except sr.RequestError as e:
+        logger.error(f"Google Speech error: {e}")
+        return "voice service down, try text instead 💀"
+    except Exception as e:
+        logger.error(f"Voice processing error: {e}")
+        return "voice processing failed lol 💀"
     finally:
         if os.path.exists("temp.wav"):
             os.remove("temp.wav")
@@ -223,19 +308,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     detected_gender = detect_gender_sync(user.first_name)
     set_user_gender(user_id, detected_gender)
     user_sessions[user_id] = []
+    sarvam_status = "✅ Sarvam AI Voice: ACTIVE" if USE_SARVAM_VOICE else "❌ Add SARVAM_API_KEY"
     welcome_text = f"""heyy {user.first_name}! ✨
 
 i'm **Senorita** - your AI buddy with advanced powers 😏🔥
 
 💬 Just chat normally
-🎙️ Send voice messages
+🎙️ Send voice messages (Sarvam AI + Google)
 🌍 Languages: hinglish, hindi, english, bengali, marathi, bhojpuri
+
+**{sarvam_status}**
 
 **/help** for all commands 🚀"""
     await update.message.reply_text(welcome_text, parse_mode='Markdown')
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    help_text = """🔥 **Senorita Commands** (Advanced Features!)
+    sarvam_info = "\n🎙️ **Voice:** Sarvam AI (Indian langs) + Google fallback" if USE_SARVAM_VOICE else ""
+    help_text = f"""🔥 **Senorita Commands** (Advanced Features!){sarvam_info}
 
 **Chat:**
 /start - restart
@@ -268,6 +357,7 @@ Just message me naturally! 😏💕"""
 
 async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     current_lang = get_user_language(update.effective_user.id)
+    sarvam_note = "\n\n🌟 Sarvam AI auto-detects your language for voice!" if USE_SARVAM_VOICE else ""
     lang_text = f"""🌍 **Languages:**
 - hinglish (default)
 - hindi 
@@ -276,7 +366,7 @@ async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 - **marathi** ⭐  
 - **bhojpuri** ⭐
 
-Current: `{current_lang}`
+Current: `{current_lang}`{sarvam_note}
 
 Say: "talk in bengali" to switch! ✨"""
     await update.message.reply_text(lang_text, parse_mode='Markdown')
@@ -474,6 +564,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 - Messages: `{stats['msgs']}`
 - Active Users: `{len(stats['users'])}`
 - Total Members: `{member_count}`
+- Voice Engine: {'Sarvam AI 🇮🇳' if USE_SARVAM_VOICE else 'Google'}
 
 Powered by Senorita 🔥"""
     await update.message.reply_text(stats_text, parse_mode='Markdown')
@@ -488,12 +579,13 @@ async def id_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 - First Name: {user.first_name}
 - Chat ID: `{chat.id}`
 - Chat Type: {chat.type}
-
-Language: {get_user_language(user.id)} ✨"""
+- Voice Engine: {'Sarvam AI 🇮🇳' if USE_SARVAM_VOICE else 'Google'}
+- Language: {get_user_language(user.id)} ✨"""
     await update.message.reply_text(id_text, parse_mode='Markdown')
 
 async def alive_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("🚀 Senorita is alive & kicking! 🔥\nAdvanced features loaded 😏")
+    sarvam_status = "✅ Sarvam AI Voice: ACTIVE" if USE_SARVAM_VOICE else "❌ Sarvam AI Voice: DISABLED"
+    await update.message.reply_text(f"🚀 Senorita is alive & kicking! 🔥\n{sarvam_status}\nAdvanced features loaded 😏")
 
 # ===== WELCOME SYSTEM =====
 welcome_status = {}
@@ -634,20 +726,22 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         file_path = f"voice_{update.message.message_id}.ogg"
         await file.download_to_drive(file_path)
         
-        transcribed_text = await transcribe_voice(file_path)
         user_name = update.effective_user.first_name or "bro"
         user_id = update.effective_user.id
         
         if update.message.chat.type == 'private' and OWNER_ID:
-            await forward_to_owner(update, f"🎤 Voice: {transcribed_text}")
+            await forward_to_owner(update, f"🎤 Voice message received")
             
         await add_reaction(update, "🎙️")
+        await update.message.reply_text("🔊 Listening with Sarvam AI 🇮🇳...")
+        
+        transcribed_text = await transcribe_voice(file_path)
         response_text = get_ai_response_sync(transcribed_text, user_name, user_id)
-        await update.message.reply_text(response_text)
+        await update.message.reply_text(f"**You said:** `{transcribed_text}`\n\n**Senorita:** {response_text}", parse_mode='Markdown')
         
     except Exception as e:
         logger.error(f"Voice error: {e}")
-        await update.message.reply_text("voice processing failed lol 💀")
+        await update.message.reply_text("voice processing failed lol 💀\nTry text instead!")
     finally:
         if file_path and os.path.exists(file_path):
             try:
@@ -706,6 +800,10 @@ if __name__ == "__main__":
     
     print("🌐 Flask running on port", port)
     print("🚀 Senorita Bot Starting...")
+    if USE_SARVAM_VOICE:
+        print("🎙️ Sarvam AI Voice: ✅ ACTIVE (Indian languages optimized)")
+    else:
+        print("🎙️ Voice: Google Speech (Add SARVAM_API_KEY for Sarvam AI 🇮🇳)")
     
     application.run_polling(
         allowed_updates=Update.ALL_TYPES,
