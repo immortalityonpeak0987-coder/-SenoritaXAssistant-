@@ -35,11 +35,11 @@ AI_BASE_URL = "https://api.sarvam.ai"
 AI_VOICE_MODEL = "sarvam-voice-1.0"
 USE_AI_VOICE = AI_VOICE_API_KEY is not None
 
-if not all([GROQ_API_KEY, TELEGRAM_BOT_TOKEN]):
-    logger.error("❌ API keys missing! 😤")
+if GROQ_API_KEY:
+    client = Groq(api_key=GROQ_API_KEY)
+else:
+    print("❌ GROQ_API_KEY missing!")
     exit(1)
-
-client = Groq(api_key=GROQ_API_KEY)
 
 # ===== AI TRAINING SYSTEM (Production Ready) =====
 training_data: Dict[int, deque] = {}
