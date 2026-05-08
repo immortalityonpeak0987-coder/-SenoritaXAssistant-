@@ -3,17 +3,19 @@ import logging
 import asyncio
 import re
 import random
+import json
+from datetime import datetime, timedelta
 from flask import Flask
 from telegram import Update, ChatPermissions
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from groq import Groq
 import speech_recognition as sr
 from pydub import AudioSegment
-from collections import defaultdict
+from collections import defaultdict, deque
 import aiohttp
-import json
-from typing import Optional
+from typing import Optional, Dict
 from dotenv import load_dotenv
+import nest_asyncio
 
 load_dotenv()
 
@@ -23,7 +25,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ===== AI VOICE SETUP (Copyright Safe) =====
+# ===== CONFIG =====
 AI_VOICE_API_KEY = os.environ.get("SARVAM_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
@@ -34,15 +36,120 @@ AI_VOICE_MODEL = "sarvam-voice-1.0"
 USE_AI_VOICE = AI_VOICE_API_KEY is not None
 
 if not all([GROQ_API_KEY, TELEGRAM_BOT_TOKEN]):
-    logger.error("API keys missing! 😤")
+    logger.error("❌ API keys missing! 😤")
     exit(1)
 
-if USE_AI_VOICE:
-    logger.info("✅ AI Voice (Indian languages): ACTIVE")
-else:
-    logger.warning("⚠️ AI Voice: Add API key for voice features")
-
 client = Groq(api_key=GROQ_API_KEY)
+
+# ===== AI TRAINING SYSTEM (Production Ready) =====
+training_data: Dict[int, deque] = {}
+TRAINING_FILE = "senorita_training.json"
+MAX_CONVS_PER_USER = 200
+AUTO_SAVE_INTERVAL = 15
+MIN_CONVO_LENGTH = 5
+
+def save_training_data(user_id: int, user_msg: str, bot_reply: str):
+    """Save conversations for AI training (thread-safe)"""
+    user_msg = user_msg.strip()
+    bot_reply = bot_reply.strip()
+    
+    if len(user_msg) < MIN_CONVO_LENGTH or len(bot_reply) < MIN_CONVO_LENGTH:
+        return
+        
+    if user_id not in training_data:
+        training_data[user_id] = deque(maxlen=MAX_CONVS_PER_USER)
+    
+    training_data[user_id].append({
+        "user": user_msg,
+        "bot": bot_reply,
+        "timestamp": datetime.now().isoformat(),
+        "length": len(user_msg)
+    })
+    
+    if len(training_data[user_id]) % AUTO_SAVE_INTERVAL == 0:
+        asyncio.create_task(_async_save_training())
+
+async def _async_save_training():
+    """Async save to avoid blocking"""
+    await asyncio.sleep(0.1)
+    save_training_to_file()
+
+def save_training_to_file():
+    """Save training data with cleanup"""
+    try:
+        if not training_data:
+            return
+            
+        cutoff = datetime.now() - timedelta(days=90)
+        filtered_data = {}
+        total_convs = 0
+        
+        for user_id, convs in training_data.items():
+            recent_convs = [c for c in convs if datetime.fromisoformat(c['timestamp']) > cutoff]
+            if recent_convs:
+                filtered_data[user_id] = list(recent_convs)
+                total_convs += len(recent_convs)
+        
+        with open(TRAINING_FILE, 'w', encoding='utf-8') as f:
+            json.dump(filtered_data, f, ensure_ascii=False, indent=1)
+        
+        logger.info(f"💾 Saved {total_convs} training conversations")
+        
+    except Exception as e:
+        logger.error(f"Training save failed: {e}")
+
+def load_training_data():
+    """Load training data on startup"""
+    global training_data
+    try:
+        if not os.path.exists(TRAINING_FILE):
+            logger.info("🧠 No training file - starting fresh")
+            return
+            
+        with open(TRAINING_FILE, 'r', encoding='utf-8') as f:
+            raw_data = json.load(f)
+        
+        training_data = {}
+        total_loaded = 0
+        
+        for user_id_str, convs in raw_data.items():
+            user_id = int(user_id_str)
+            valid_convs = []
+            for conv in convs[-MAX_CONVS_PER_USER:]:
+                if (isinstance(conv, dict) and 
+                    'user' in conv and 'bot' in conv and 
+                    len(conv['user']) >= MIN_CONVO_LENGTH):
+                    valid_convs.append(conv)
+            
+            if valid_convs:
+                training_data[user_id] = deque(valid_convs, maxlen=MAX_CONVS_PER_USER)
+                total_loaded += len(valid_convs)
+        
+        logger.info(f"🧠 Loaded {total_loaded} conversations from {len(training_data)} users")
+        
+    except Exception as e:
+        logger.error(f"Training load failed: {e}")
+        training_data = {}
+
+def _build_training_context(user_id: int, max_context: int = 1200) -> str:
+    """Smart training context builder"""
+    if user_id not in training_data or not training_data[user_id]:
+        return ""
+    
+    recent_convs = list(training_data[user_id])[-8:]
+    recent_convs.sort(key=lambda x: x['length'], reverse=True)
+    
+    context_parts = []
+    context_len = 0
+    
+    for conv in recent_convs[:6]:
+        part = f"👤: {conv['user'][:80]}...\n💬: {conv['bot'][:120]}..."
+        if context_len + len(part) > max_context:
+            break
+        context_parts.append(part)
+        context_len += len(part)
+    
+    return "\n".join(context_parts)
 
 # ===== AI VOICE FUNCTIONS =====
 async def transcribe_with_ai(audio_file_path: str, language: str = "hi") -> Optional[str]:
@@ -84,7 +191,12 @@ app = Flask(__name__)
 @app.route("/")
 def home():
     voice_status = "✅ AI Voice: ACTIVE 🇮🇳" if USE_AI_VOICE else "❌ AI Voice: DISABLED"
-    return f"Senorita bot alive 🔥\n{voice_status}\nVoice replies enabled!"
+    total_training = sum(len(v) for v in training_data.values()) if training_data else 0
+    return f"""🚀 **Senorita Bot Status** 🔥
+{voice_status}
+🧠 Training Data: {total_training} conversations
+📊 All features: ACTIVE
+Ready for 24/7 UptimeRobot! ✨"""
 
 # ===== USER SESSIONS =====
 user_sessions = {}
@@ -143,14 +255,31 @@ FEATURES: - Can tag anyone - Give welcomes - Track stats - Purge messages - Adva
 
 def detect_gender_sync(user_name: str) -> str:
     try:
-        response = client.chat.completions.create(model="llama-3.1-8b-instant", messages=[{"role": "system", "content": "You are a gender detection assistant. Based on the given name, predict gender. Respond with ONLY one word: male or female."}, {"role": "user", "content": f"What is the likely gender for the name: {user_name}"} ], max_tokens=10)
+        response = client.chat.completions.create(
+            model="llama-3.1-8b-instant", 
+            messages=[{
+                "role": "system", 
+                "content": "You are a gender detection assistant. Based on the given name, predict gender. Respond with ONLY one word: male or female."
+            }, {
+                "role": "user", 
+                "content": f"What is the likely gender for the name: {user_name}"
+            }], 
+            max_tokens=10
+        )
         gender = response.choices[0].message.content.strip().lower()
         return gender if gender in ["male", "female"] else "unknown"
     except:
         return "unknown"
 
 async def detect_language_request(message: str) -> str:
-    language_keywords = {"hindi": ["hindi", "hindi me", "hindi mein"], "english": ["english", "english me", "angrezi"], "hinglish": ["hinglish", "mix", "minglish"], "bengali": ["bengali", "bangla", "bengali me"], "marathi": ["marathi", "marathi me"], "bhojpuri": ["bhojpuri", "bhojpuri me"]}
+    language_keywords = {
+        "hindi": ["hindi", "hindi me", "hindi mein"], 
+        "english": ["english", "english me", "angrezi"], 
+        "hinglish": ["hinglish", "mix", "minglish"], 
+        "bengali": ["bengali", "bangla", "bengali me"], 
+        "marathi": ["marathi", "marathi me"], 
+        "bhojpuri": ["bhojpuri", "bhojpuri me"]
+    }
     message_lower = message.lower()
     change_phrases = ["talk in", "speak in", "language", "switch to", "batao in"]
     if any(phrase in message_lower for phrase in change_phrases):
@@ -159,6 +288,7 @@ async def detect_language_request(message: str) -> str:
                 return lang
     return ""
 
+# ===== ENHANCED AI RESPONSE WITH TRAINING =====
 def get_ai_response_sync(user_message: str, user_name: str, user_id: int) -> str:
     try:
         user_gender = get_user_gender(user_id)
@@ -166,21 +296,47 @@ def get_ai_response_sync(user_message: str, user_name: str, user_id: int) -> str
             detected_gender = detect_gender_sync(user_name)
             set_user_gender(user_id, detected_gender)
             user_gender = detected_gender
+            
         language = get_user_language(user_id)
         system_prompt = get_system_prompt(language, user_gender)
         conversation = get_conversation_history(user_id)
+        
+        # 🧠 ADD TRAINING DATA (Makes bot smarter!)
+        training_context = _build_training_context(user_id)
+        if training_context:
+            system_prompt += f"\n\n🧠 PAST CHATS:\n{training_context}"
+        
         messages = [{"role": "system", "content": system_prompt}]
-        for msg in conversation:
+        for msg in conversation[-8:]:
             messages.append(msg)
         messages.append({"role": "user", "content": user_message})
-        response = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, max_tokens=150, temperature=0.9, top_p=0.95)
-        ai_response = response.choices[0].message.content or "haha fr 💀"
+        
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=messages,
+            max_tokens=200,
+            temperature=0.85,
+            top_p=0.92,
+            presence_penalty=0.1
+        )
+        
+        ai_response = response.choices[0].message.content.strip()
+        if not ai_response:
+            ai_response = "haha fr 💀 kya bol raha hai?"
+            
+        # 🚀 SAVE FOR TRAINING (After successful response)
+        save_training_data(user_id, user_message, ai_response)
+        
         add_to_conversation(user_id, "user", user_message)
         add_to_conversation(user_id, "assistant", ai_response)
+        
         return ai_response
+        
     except Exception as e:
-        logger.error(f"AI Error: {str(e)}")
-        return "wait what?? something glitched 💀 try again"
+        logger.error(f"AI Response Error: {str(e)}")
+        fallback = "Arre yaar kuch gadbad ho gayi 💀\nDobara bol!"
+        save_training_data(user_id, user_message, fallback)
+        return fallback
 
 async def transcribe_voice(file_path: str) -> str:
     if USE_AI_VOICE:
@@ -215,7 +371,10 @@ async def rate_limit_check(user_id: int) -> bool:
 
 async def add_reaction(update: Update, emoji: str):
     try:
-        await update.effective_chat.set_message_reaction(message_id=update.message.message_id, reaction=[{"type": "emoji", "emoji": emoji}])
+        await update.effective_chat.set_message_reaction(
+            message_id=update.message.message_id, 
+            reaction=[{"type": "emoji", "emoji": emoji}]
+        )
     except:
         pass
 
@@ -226,7 +385,7 @@ async def forward_to_owner(update: Update, text: str):
         except:
             pass
 
-# ===== COMMANDS =====
+# ===== COMMANDS (All Original Features) =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     user_id = user.id
@@ -300,7 +459,7 @@ async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     user_sessions[update.effective_user.id] = []
     await update.message.reply_text("chat cleared! fresh start ✨")
 
-# ===== MODERATION (All 12 commands) =====
+# ===== MODERATION COMMANDS (Unchanged) =====
 async def kick_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message.reply_to_message:
         await update.message.reply_text("reply to kick!")
@@ -376,7 +535,16 @@ async def unmute_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await update.message.reply_text("admins only!")
             return
         user_to_unmute = update.message.reply_to_message.from_user
-        permissions = ChatPermissions(can_send_messages=True, can_send_media_messages=True, can_send_polls=True, can_send_other_messages=True, can_add_web_page_previews=True, can_change_info=False, can_invite_users=True, can_pin_messages=False)
+        permissions = ChatPermissions(
+            can_send_messages=True, 
+            can_send_media_messages=True, 
+            can_send_polls=True, 
+            can_send_other_messages=True, 
+            can_add_web_page_previews=True, 
+            can_change_info=False, 
+            can_invite_users=True, 
+            can_pin_messages=False
+        )
         await update.effective_chat.restrict_member(user_to_unmute.id, permissions)
         await update.message.reply_text(f"🔊 {user_to_unmute.first_name} unmuted!")
     except:
@@ -392,7 +560,12 @@ async def promote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await update.message.reply_text("admins only!")
             return
         user_to_promote = update.message.reply_to_message.from_user
-        await update.effective_chat.promote_member(user_to_promote.id, can_change_info=True, can_delete_messages=True, can_restrict_members=True)
+        await update.effective_chat.promote_member(
+            user_to_promote.id, 
+            can_change_info=True, 
+            can_delete_messages=True, 
+            can_restrict_members=True
+        )
         await update.message.reply_text(f"🎉 {user_to_promote.first_name} is now admin!")
     except:
         await update.message.reply_text("couldn't promote!")
@@ -407,12 +580,17 @@ async def demote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await update.message.reply_text("admins only!")
             return
         user_to_demote = update.message.reply_to_message.from_user
-        await update.effective_chat.promote_member(user_to_demote.id, can_change_info=False, can_delete_messages=False, can_restrict_members=False)
+        await update.effective_chat.promote_member(
+            user_to_demote.id, 
+            can_change_info=False, 
+            can_delete_messages=False, 
+            can_restrict_members=False
+        )
         await update.message.reply_text(f"👋 {user_to_demote.first_name} is no longer admin!")
     except:
         await update.message.reply_text("couldn't demote!")
 
-# ===== SPECIAL FEATURES =====
+# ===== SPECIAL FEATURES (Unchanged) =====
 async def purge_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message.reply_to_message:
         await update.message.reply_text("Reply to message to purge!")
@@ -491,9 +669,15 @@ async def id_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 async def alive_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     voice_status = "✅ AI Voice: ACTIVE 🇮🇳" if USE_AI_VOICE else "❌ AI Voice: DISABLED"
-    await update.message.reply_text(f"🚀 Senorita alive & kicking! 🔥\n{voice_status}\nAll features loaded 😏")
+    total_training = sum(len(v) for v in training_data.values()) if training_data else 0
+    await update.message.reply_text(
+        f"🚀 Senorita alive & kicking! 🔥\n"
+        f"{voice_status}\n"
+        f"🧠 Training: {total_training} convos\n"
+        f"All features loaded 😏"
+    )
 
-# ===== WELCOME SYSTEM =====
+# ===== WELCOME SYSTEM (Unchanged) =====
 welcome_status = {}
 welcome_messages = {}
 
@@ -549,7 +733,7 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     except:
         await update.message.reply_text("failed lol")
 
-# ===== MAIN MESSAGE HANDLER =====
+# ===== MAIN MESSAGE HANDLER (Unchanged Logic) =====
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message or not update.message.text:
         return
@@ -600,92 +784,146 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await add_reaction(update, "🔥")
         await message.reply_text(response)
 
-# ===== VOICE HANDLER - INDIAN GIRL VOICE REPLY =====
+# ===== ENHANCED VOICE HANDLER (Natural Voice Reply) =====
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     file_path = None
     voice_reply_path = None
     try:
         if not update.message.voice:
             return
+            
         if not await rate_limit_check(update.effective_user.id):
             await update.message.reply_text("Chill kar spam mat kar 😤")
             return
+            
         file = await update.message.voice.get_file()
         file_path = f"voice_{update.message.message_id}.ogg"
         await file.download_to_drive(file_path)
+        
         user_name = update.effective_user.first_name or "bro"
         user_id = update.effective_user.id
+        
         if update.message.chat.type == 'private' and OWNER_ID:
-            await forward_to_owner(update, f"🎤 Voice message received")
+            await forward_to_owner(update, f"🎤 Voice from {user_name}")
+            
         await add_reaction(update, "🎙️")
+        await context.bot.send_chat_action(update.effective_chat.id, "typing")
+        
         transcribed_text = await transcribe_voice(file_path)
+        if not transcribed_text or len(transcribed_text.strip()) < 2:
+            await update.message.reply_text("Voice samajh nahi aaya 😅\nText try kar!")
+            return
+            
         response_text = get_ai_response_sync(transcribed_text, user_name, user_id)
+        
         if USE_AI_VOICE:
             voice_reply_path = f"reply_{update.message.message_id}.mp3"
             tts_success = await generate_indian_girl_voice(response_text, voice_reply_path)
-            if tts_success and os.path.exists(voice_reply_path):
+            
+            if tts_success and os.path.exists(voice_reply_path) and os.path.getsize(voice_reply_path) > 1000:
                 with open(voice_reply_path, 'rb') as audio:
-                    await update.message.reply_voice(audio, caption=f"**You:** `{transcribed_text[:50]}...`\n**Me:** {response_text}", parse_mode='Markdown')
+                    await update.message.reply_voice(
+                        audio,
+                        caption=response_text[:1000],
+                        parse_mode='Markdown',
+                        reply_to_message_id=update.message.message_id
+                    )
                 await add_reaction(update, "💕")
             else:
-                await update.message.reply_text(f"**You:** `{transcribed_text}`\n\n**Me:** {response_text}", parse_mode='Markdown')
+                await update.message.reply_text(
+                    f"🎤 {response_text}\n\n*(Voice banane mein thodi problem 😅)*",
+                    parse_mode='Markdown',
+                    reply_to_message_id=update.message.message_id
+                )
         else:
-            await update.message.reply_text(f"**You:** `{transcribed_text}`\n\n**Me:** {response_text}", parse_mode='Markdown')
+            await update.message.reply_text(
+                response_text,
+                reply_to_message_id=update.message.message_id,
+                parse_mode='Markdown'
+            )
+            
     except Exception as e:
-        logger.error(f"Voice error: {e}")
-        await update.message.reply_text("voice processing failed lol 💀\nTry text instead!")
+        logger.error(f"Voice handler error: {e}", exc_info=True)
+        await update.message.reply_text(
+            "voice samajh nahi aaya 💀\nText try kar le bhai!",
+            reply_to_message_id=update.message.message_id
+        )
     finally:
         for path in [file_path, voice_reply_path]:
             if path and os.path.exists(path):
                 try:
                     os.remove(path)
-                except:
-                    pass
+                    logger.debug(f"Cleaned up: {path}")
+                except Exception as cleanup_err:
+                    logger.warning(f"Cleanup failed for {path}: {cleanup_err}")
 
 # ===== ERROR HANDLER =====
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    logger.error(f"Error: {context.error}")
+    logger.error(f"Update {update} caused error {context.error}")
 
-# ===== APPLICATION BUILDER =====
-application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+# ===== MAIN APPLICATION =====
+def main():
+    # 🧠 Load training data on startup
+    load_training_data()
+    
+    # Auto-save training every 30 mins
+    async def periodic_save():
+        while True:
+            await asyncio.sleep(1800)  # 30 minutes
+            save_training_to_file()
+    
+    loop = asyncio.get_event_loop()
+    loop.create_task(periodic_save())
+    
+    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
-# All 20+ Commands
-application.add_handler(CommandHandler("start", start))
-application.add_handler(CommandHandler("help", help_command))
-application.add_handler(CommandHandler("language", language_command))
-application.add_handler(CommandHandler("clear", clear_command))
-application.add_handler(CommandHandler("kick", kick_command))
-application.add_handler(CommandHandler("ban", ban_command))
-application.add_handler(CommandHandler("unban", unban_command))
-application.add_handler(CommandHandler("mute", mute_command))
-application.add_handler(CommandHandler("unmute", unmute_command))
-application.add_handler(CommandHandler("promote", promote_command))
-application.add_handler(CommandHandler("demote", demote_command))
-application.add_handler(CommandHandler("broadcast", broadcast_command))
-application.add_handler(CommandHandler("purge", purge_command))
-application.add_handler(CommandHandler("tagall", tagall_command))
-application.add_handler(CommandHandler("stats", stats_command))
-application.add_handler(CommandHandler("id", id_command))
-application.add_handler(CommandHandler("alive", alive_command))
-application.add_handler(CommandHandler("setwelcome", setwelcome_command))
-application.add_handler(CommandHandler("welcome", welcome_toggle))
+    # All Commands (20+ features preserved)
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("language", language_command))
+    application.add_handler(CommandHandler("clear", clear_command))
+    application.add_handler(CommandHandler("kick", kick_command))
+    application.add_handler(CommandHandler("ban", ban_command))
+    application.add_handler(CommandHandler("unban", unban_command))
+    application.add_handler(CommandHandler("mute", mute_command))
+    application.add_handler(CommandHandler("unmute", unmute_command))
+    application.add_handler(CommandHandler("promote", promote_command))
+    application.add_handler(CommandHandler("demote", demote_command))
+    application.add_handler(CommandHandler("broadcast", broadcast_command))
+    application.add_handler(CommandHandler("purge", purge_command))
+    application.add_handler(CommandHandler("tagall", tagall_command))
+    application.add_handler(CommandHandler("stats", stats_command))
+    application.add_handler(CommandHandler("id", id_command))
+    application.add_handler(CommandHandler("alive", alive_command))
+    application.add_handler(CommandHandler("setwelcome", setwelcome_command))
+    application.add_handler(CommandHandler("welcome", welcome_toggle))
 
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-application.add_handler(MessageHandler(filters.VOICE, handle_voice))
-application.add_error_handler(error_handler)
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    application.add_handler(MessageHandler(filters.VOICE, handle_voice))
+    application.add_error_handler(error_handler)
 
-# ===== RUN =====
-if __name__ == "__main__":
-    import nest_asyncio
-    nest_asyncio.apply()
+    # Flask + Bot
     port = int(os.environ.get("PORT", 10000))
     from threading import Thread
+    
     def run_flask():
         app.run(host="0.0.0.0", port=port, debug=False)
+    
     flask_thread = Thread(target=run_flask)
     flask_thread.daemon = True
     flask_thread.start()
+    
     print("🌐 Flask running on port", port)
     print("🚀 Senorita Bot Starting...")
     print("🎙️ Voice Reply:", "AI Girl Voice 🇮🇳" if USE_AI_VOICE else "Text Only")
-    application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True, poll_interval=1.0)
+    print("🧠 AI Training: ACTIVE (Learns from chats!)")
+    
+    application.run_polling(
+        allowed_updates=Update.ALL_TYPES, 
+        drop_pending_updates=True, 
+        poll_interval=1.0
+    )
+
+if __name__ == "__main__":
+    nest_asyncio.apply()
+    main()
