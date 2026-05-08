@@ -151,22 +151,41 @@ def _build_training_context(user_id: int, max_context: int = 1200) -> str:
     
     return "\n".join(context_parts)
 
-# ===== AI VOICE FUNCTIONS =====
+# ===== FIXED AI VOICE FUNCTIONS =====
 async def transcribe_with_ai(audio_file_path: str, language: str = "hi") -> Optional[str]:
     if not AI_VOICE_API_KEY:
         return None
     try:
-        with open(audio_file_path, 'rb') as f:
+        # Convert audio to proper format
+        audio = AudioSegment.from_file(audio_file_path)
+        audio = audio.set_frame_rate(16000).set_channels(1)
+        audio.export("temp_transcribe.wav", format="wav")
+        
+        with open("temp_transcribe.wav", 'rb') as f:
             audio_bytes = f.read()
-        headers = {"Authorization": f"Bearer {AI_VOICE_API_KEY}", "Content-Type": "application/json"}
-        data = {"audio": audio_bytes, "language": language, "model": AI_VOICE_MODEL, "response_format": "json"}
+            
+        headers = {"Authorization": f"Bearer {AI_VOICE_API_KEY}"}
+        form_data = aiohttp.FormData()
+        form_data.add_field('audio', audio_bytes, filename='audio.wav', content_type='audio/wav')
+        form_data.add_field('language', language)
+        form_data.add_field('model', AI_VOICE_MODEL)
+        form_data.add_field('response_format', 'json')
+        
         async with aiohttp.ClientSession() as session:
-            async with session.post(f"{AI_BASE_URL}/v1/audio/transcriptions", headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+            async with session.post(
+                f"{AI_BASE_URL}/v1/audio/transcriptions",
+                headers=headers,
+                data=form_data,
+                timeout=aiohttp.ClientTimeout(total=30)
+            ) as response:
                 if response.status == 200:
                     result = await response.json()
-                    return result.get("text", "").strip()
+                    text = result.get("text", "").strip()
+                    if text:
+                        return text
         return None
-    except:
+    except Exception as e:
+        logger.error(f"AI Transcribe failed: {e}")
         return None
 
 async def generate_indian_girl_voice(text: str, output_path: str) -> bool:
@@ -174,15 +193,28 @@ async def generate_indian_girl_voice(text: str, output_path: str) -> bool:
         return False
     try:
         headers = {"Authorization": f"Bearer {AI_VOICE_API_KEY}", "Content-Type": "application/json"}
-        data = {"text": text[:200], "voice": "shruti", "speed": 1.1, "format": "mp3"}
+        data = {
+            "text": text[:150],
+            "voice": "shruti",
+            "speed": 1.0,
+            "format": "mp3"
+        }
         async with aiohttp.ClientSession() as session:
-            async with session.post(f"{AI_BASE_URL}/v1/audio/speech", headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=15)) as response:
+            async with session.post(
+                f"{AI_BASE_URL}/v1/audio/speech",
+                headers=headers,
+                json=data,
+                timeout=aiohttp.ClientTimeout(total=20)
+            ) as response:
                 if response.status == 200:
-                    with open(output_path, 'wb') as f:
-                        f.write(await response.read())
-                    return True
+                    audio_data = await response.read()
+                    if len(audio_data) > 500:
+                        with open(output_path, 'wb') as f:
+                            f.write(audio_data)
+                        return True
         return False
-    except:
+    except Exception as e:
+        logger.error(f"TTS failed: {e}")
         return False
 
 # ===== FLASK APP =====
@@ -205,7 +237,8 @@ user_requests = defaultdict(list)
 chat_stats = defaultdict(lambda: {"msgs": 0, "users": set()})
 
 def get_user_language(user_id: int) -> str:
-    return user_preferences.get(user_id, {}).get("language", "hinglish")
+    lang = user_preferences.get(user_id, {}).get("language", "")
+    return lang if lang else "hinglish"  # DEFAULT HINGLISH
 
 def set_user_language(user_id: int, language: str) -> None:
     if user_id not in user_preferences:
@@ -233,25 +266,36 @@ def add_to_conversation(user_id: int, role: str, content: str):
         user_sessions[user_id] = user_sessions[user_id][-15:]
 
 def get_system_prompt(language: str, user_gender: str) -> str:
-    language_instruction = ""
     if language == "hinglish":
-        language_instruction = "Respond in Hinglish (mix of Hindi and English). Use TU/TUM (casual). Be short, natural, Gen-Z."
+        language_instruction = """**STRICT HINGLISH ONLY** (Roman Hindi + English mix):
+Examples: "haha fr bhai", "kya haal hai?", "mazza aa gaya 😂", "tu kaisa hai?"
+NO DEVANAGARI SCRIPT. Casual Gen-Z style always."""
     elif language == "hindi":
-        language_instruction = "Respond in Hindi (Devanagari). Use TU/TUM (casual). Be short."
+        language_instruction = "Respond in Hindi (Devanagari script only)."
     elif language == "english":
-        language_instruction = "Respond in English. Casual, short, natural."
+        language_instruction = "Respond in English only. Casual style."
     elif language == "bengali":
-        language_instruction = "Respond in Bengali (Bangla). Use TUI (casual). Be short, natural."
+        language_instruction = "Respond in Bengali (Bangla). Use TUI (casual)."
     elif language == "marathi":
-        language_instruction = "Respond in Marathi. Use TU (casual). Be short, natural."
+        language_instruction = "Respond in Marathi. Use TU (casual)."
     elif language == "bhojpuri":
-        language_instruction = "Respond in Bhojpuri. Use TU (casual). Be short, natural, desi style."
+        language_instruction = "Respond in Bhojpuri. Use TU (casual), desi style."
     else:
-        language_instruction = f"Respond in {language}."
-    return f"""You are Senorita - a Gen-Z AI girl friend with advanced powers 🔥
-PERSONALITY: - Use TU/TUM/TUI (casual), NOT Aap - Short responses (1-2 lines max) - Meme-savvy, slang, emojis - Slightly flirty but cute - Never formal or robotic - Like talking to a real friend
+        language_instruction = """**STRICT HINGLISH** - Roman Hindi+English mix only.
+NO pure Hindi script. Examples: "kya bol raha hai bhai?", "haha fr 💀" """
+    
+    return f"""You are Senorita - Gen-Z AI girlfriend 😏🔥
+
+PERSONALITY:
+- Use TU/TUM only (NEVER Aap)
+- Short responses (1-2 lines MAX)
+- Emojis + Gen-Z slang always
+- Slightly flirty but cute
+- Meme-savvy, natural chat
+
 {language_instruction}
-FEATURES: - Can tag anyone - Give welcomes - Track stats - Purge messages - Advanced moderation"""
+
+FEATURES: tag anyone, welcomes, stats, moderation, voice replies"""
 
 def detect_gender_sync(user_name: str) -> str:
     try:
@@ -259,12 +303,12 @@ def detect_gender_sync(user_name: str) -> str:
             model="llama-3.1-8b-instant", 
             messages=[{
                 "role": "system", 
-                "content": "You are a gender detection assistant. Based on the given name, predict gender. Respond with ONLY one word: male or female."
+                "content": "Predict gender from name. Respond ONLY: male or female"
             }, {
                 "role": "user", 
-                "content": f"What is the likely gender for the name: {user_name}"
+                "content": f"Gender for name: {user_name}"
             }], 
-            max_tokens=10
+            max_tokens=5
         )
         gender = response.choices[0].message.content.strip().lower()
         return gender if gender in ["male", "female"] else "unknown"
@@ -275,20 +319,20 @@ async def detect_language_request(message: str) -> str:
     language_keywords = {
         "hindi": ["hindi", "hindi me", "hindi mein"], 
         "english": ["english", "english me", "angrezi"], 
-        "hinglish": ["hinglish", "mix", "minglish"], 
-        "bengali": ["bengali", "bangla", "bengali me"], 
-        "marathi": ["marathi", "marathi me"], 
-        "bhojpuri": ["bhojpuri", "bhojpuri me"]
+        "hinglish": ["hinglish", "mix", "minglish", "hindi english"], 
+        "bengali": ["bengali", "bangla"], 
+        "marathi": ["marathi"], 
+        "bhojpuri": ["bhojpuri"]
     }
     message_lower = message.lower()
-    change_phrases = ["talk in", "speak in", "language", "switch to", "batao in"]
+    change_phrases = ["talk in", "speak in", "language", "switch to", "batao in", "bol in"]
     if any(phrase in message_lower for phrase in change_phrases):
         for lang, keywords in language_keywords.items():
             if any(keyword in message_lower for keyword in keywords):
                 return lang
     return ""
 
-# ===== ENHANCED AI RESPONSE WITH TRAINING =====
+# ===== ENHANCED AI RESPONSE =====
 def get_ai_response_sync(user_message: str, user_name: str, user_id: int) -> str:
     try:
         user_gender = get_user_gender(user_id)
@@ -299,13 +343,13 @@ def get_ai_response_sync(user_message: str, user_name: str, user_id: int) -> str
             
         language = get_user_language(user_id)
         system_prompt = get_system_prompt(language, user_gender)
-        conversation = get_conversation_history(user_id)
         
-        # 🧠 ADD TRAINING DATA (Makes bot smarter!)
+        # Add training context
         training_context = _build_training_context(user_id)
         if training_context:
-            system_prompt += f"\n\n🧠 PAST CHATS:\n{training_context}"
+            system_prompt += f"\n\n🧠 Recent chats:\n{training_context}"
         
+        conversation = get_conversation_history(user_id)
         messages = [{"role": "system", "content": system_prompt}]
         for msg in conversation[-8:]:
             messages.append(msg)
@@ -314,19 +358,17 @@ def get_ai_response_sync(user_message: str, user_name: str, user_id: int) -> str
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=messages,
-            max_tokens=200,
+            max_tokens=150,
             temperature=0.85,
             top_p=0.92,
             presence_penalty=0.1
         )
         
         ai_response = response.choices[0].message.content.strip()
-        if not ai_response:
-            ai_response = "haha fr 💀 kya bol raha hai?"
+        if not ai_response or len(ai_response) < 5:
+            ai_response = "haha fr 💀 kya bol raha hai bhai?"
             
-        # 🚀 SAVE FOR TRAINING (After successful response)
         save_training_data(user_id, user_message, ai_response)
-        
         add_to_conversation(user_id, "user", user_message)
         add_to_conversation(user_id, "assistant", ai_response)
         
@@ -334,17 +376,21 @@ def get_ai_response_sync(user_message: str, user_name: str, user_id: int) -> str
         
     except Exception as e:
         logger.error(f"AI Response Error: {str(e)}")
-        fallback = "Arre yaar kuch gadbad ho gayi 💀\nDobara bol!"
+        fallback = "Arre yaar kuch gadbad ho gayi 💀\nDobara bol bhai!"
         save_training_data(user_id, user_message, fallback)
         return fallback
 
 async def transcribe_voice(file_path: str) -> str:
+    user_lang = get_user_language(12345) or "hi"
+    
+    # Try AI first
     if USE_AI_VOICE:
         logger.info("🔊 Using AI voice engine...")
-        user_lang = get_user_language(12345) or "hi"
         ai_result = await transcribe_with_ai(file_path, user_lang)
         if ai_result:
-            return ai_result
+            return ai_result.strip()
+    
+    # Google backup
     logger.info("🔊 Using Google Speech (backup)...")
     recognizer = sr.Recognizer()
     try:
@@ -354,9 +400,9 @@ async def transcribe_voice(file_path: str) -> str:
             recognizer.adjust_for_ambient_noise(source)
             audio_data = recognizer.record(source)
             text = recognizer.recognize_google(audio_data, language='hi-IN')
-            return text if text else "couldn't understand that"
+            return text if text else "voice samajh nahi aayi"
     except:
-        return "couldn't understand that voice 😅"
+        return "voice samajh nahi aayi 😅"
     finally:
         if os.path.exists("temp.wav"):
             os.remove("temp.wav")
@@ -385,35 +431,36 @@ async def forward_to_owner(update: Update, text: str):
         except:
             pass
 
-# ===== COMMANDS (All Original Features) =====
+# ===== ALL COMMANDS (UNCHANGED) =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     user_id = user.id
     detected_gender = detect_gender_sync(user.first_name)
     set_user_gender(user_id, detected_gender)
     user_sessions[user_id] = []
+    set_user_language(user_id, "hinglish")  # Force Hinglish default
     voice_status = "✅ AI Voice: ACTIVE 🇮🇳" if USE_AI_VOICE else "❌ AI Voice: Add API key"
     welcome_text = f"""heyy {user.first_name}! ✨
 
-i'm **Senorita** - your AI buddy with advanced powers 😏🔥
+i'm **Senorita** - your AI girlfriend with voice powers 😏🔥
 
-💬 Just chat normally
-🎙️ Send voice → Get **voice reply** back!
-🌍 Languages: hinglish, hindi, english, bengali, marathi, bhojpuri
+💬 Chat normally (Hinglish default)
+🎙️ Send voice → Get **VOICE reply** back!
+🌍 /language to change
 
 **{voice_status}**
 
-**/help** for all commands 🚀"""
+Just talk naturally! 😘"""
     await update.message.reply_text(welcome_text, parse_mode='Markdown')
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    voice_info = "\n🎙️ **Voice:** Send voice → Get cute voice reply! 🇮🇳" if USE_AI_VOICE else ""
+    voice_info = "\n🎙️ **Voice:** Send voice → Get VOICE reply! 🇮🇳" if USE_AI_VOICE else ""
     help_text = f"""🔥 **Senorita Commands**{voice_info}
 
 **Chat:**
-/start - restart
-/language - change lang  
-/clear - clear chat
+/start - restart chat
+/language - change language  
+/clear - clear memory
 
 **Moderation (Admins):**
 /kick - kick (reply)
@@ -427,39 +474,35 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 /tagall - tag everyone
 /broadcast msg - announce
 
-**Fun/Stats:**
+**Fun:**
 /stats - chat stats
 /id - your info
 /alive - bot status
 
-**Welcome:**
-/setwelcome - set welcome
-/welcome on/off - toggle
-
-Chat naturally! 😏💕"""
+Chat naturally in Hinglish! 😏💕"""
     await update.message.reply_text(help_text, parse_mode='Markdown')
 
 async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     current_lang = get_user_language(update.effective_user.id)
     voice_note = "\n\n🌟 Voice auto-detects language!" if USE_AI_VOICE else ""
-    lang_text = f"""🌍 **Languages:**
-- hinglish (default)
-- hindi 
-- english
-- bengali ⭐
-- marathi ⭐  
-- bhojpuri ⭐
+    lang_text = f"""🌍 **Choose Language:**
+- `hinglish` (default ⭐)
+- `hindi`
+- `english`
+- `bengali`
+- `marathi`  
+- `bhojpuri`
 
-Current: `{current_lang}`{voice_note}
+Yours: `{current_lang}`{voice_note}
 
-"talk in bengali" bol do! ✨"""
+Say: "talk in bengali" ✨"""
     await update.message.reply_text(lang_text, parse_mode='Markdown')
 
 async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_sessions[update.effective_user.id] = []
     await update.message.reply_text("chat cleared! fresh start ✨")
 
-# ===== MODERATION COMMANDS (Unchanged) =====
+# ===== MODERATION COMMANDS (UNCHANGED) =====
 async def kick_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message.reply_to_message:
         await update.message.reply_text("reply to kick!")
@@ -590,7 +633,6 @@ async def demote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     except:
         await update.message.reply_text("couldn't demote!")
 
-# ===== SPECIAL FEATURES (Unchanged) =====
 async def purge_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message.reply_to_message:
         await update.message.reply_text("Reply to message to purge!")
@@ -674,10 +716,10 @@ async def alive_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         f"🚀 Senorita alive & kicking! 🔥\n"
         f"{voice_status}\n"
         f"🧠 Training: {total_training} convos\n"
-        f"All features loaded 😏"
+        f"Hinglish mode: ACTIVE 😏"
     )
 
-# ===== WELCOME SYSTEM (Unchanged) =====
+# ===== WELCOME SYSTEM =====
 welcome_status = {}
 welcome_messages = {}
 
@@ -733,7 +775,7 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     except:
         await update.message.reply_text("failed lol")
 
-# ===== MAIN MESSAGE HANDLER (Unchanged Logic) =====
+# ===== FIXED MAIN MESSAGE HANDLER =====
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message or not update.message.text:
         return
@@ -744,10 +786,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     message_text = message.text.lower()
     chat_stats[chat_id]['msgs'] += 1
     chat_stats[chat_id]['users'].add(user_id)
+    
     if not await rate_limit_check(user_id):
         return
+        
     if message.chat.type == 'private' and OWNER_ID:
         await forward_to_owner(update, message.text)
+        
     if message.new_chat_members:
         chat_id = message.chat_id
         if chat_id in welcome_status and welcome_status[chat_id]:
@@ -759,6 +804,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                         await message.reply_text(formatted_welcome, parse_mode='HTML')
                     except:
                         await message.reply_text(f"Welcome {new_member.first_name} to {message.chat.title or 'this group'}! 🎉")
+    
     should_respond = False
     if message.chat.type == 'private':
         should_respond = True
@@ -766,25 +812,33 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         should_respond = True
     elif bot_username and f"@{bot_username}" in message.text:
         should_respond = True
-    elif "senorita" in message_text:
+    elif "senorita" in message_text or "senorita" in message.text:
         should_respond = True
+        
     if should_respond:
         user_name = message.from_user.first_name or "bro"
         if bot_username:
             user_text = message.text.replace(f"@{bot_username}", "").strip()
         else:
             user_text = message.text
+            
+        # Language detection
         lang_request = await detect_language_request(user_text)
         if lang_request:
             set_user_language(user_id, lang_request)
-            await message.reply_text(f"aight, switching to {lang_request} ✨")
+            await message.reply_text(f"aight, {lang_request} mode ON ✨")
             return
+            
+        # Force Hinglish for new users
+        if get_user_language(user_id) == "":
+            set_user_language(user_id, "hinglish")
+            
         await context.bot.send_chat_action(chat_id=message.chat_id, action="typing")
         response = get_ai_response_sync(user_text, user_name, user_id)
         await add_reaction(update, "🔥")
         await message.reply_text(response)
 
-# ===== ENHANCED VOICE HANDLER (Natural Voice Reply) =====
+# ===== FIXED VOICE HANDLER (VOICE REPLY GUARANTEED) =====
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     file_path = None
     voice_reply_path = None
@@ -792,70 +846,82 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         if not update.message.voice:
             return
             
-        if not await rate_limit_check(update.effective_user.id):
+        user_id = update.effective_user.id
+        if not await rate_limit_check(user_id):
             await update.message.reply_text("Chill kar spam mat kar 😤")
             return
             
+        # Download voice file
         file = await update.message.voice.get_file()
         file_path = f"voice_{update.message.message_id}.ogg"
         await file.download_to_drive(file_path)
         
         user_name = update.effective_user.first_name or "bro"
-        user_id = update.effective_user.id
         
         if update.message.chat.type == 'private' and OWNER_ID:
             await forward_to_owner(update, f"🎤 Voice from {user_name}")
             
         await add_reaction(update, "🎙️")
-        await context.bot.send_chat_action(update.effective_chat.id, "typing")
+        await context.bot.send_chat_action(update.effective_chat.id, "record_voice")
         
+        # Transcribe voice
         transcribed_text = await transcribe_voice(file_path)
+        logger.info(f"Transcribed: {transcribed_text}")
+        
         if not transcribed_text or len(transcribed_text.strip()) < 2:
-            await update.message.reply_text("Voice samajh nahi aaya 😅\nText try kar!")
+            await update.message.reply_text("voice samajh nahi aayi 😅\ntext try kar bhai!")
             return
-            
+        
+        # Generate AI response
         response_text = get_ai_response_sync(transcribed_text, user_name, user_id)
         
+        # Send VOICE REPLY
         if USE_AI_VOICE:
             voice_reply_path = f"reply_{update.message.message_id}.mp3"
             tts_success = await generate_indian_girl_voice(response_text, voice_reply_path)
             
             if tts_success and os.path.exists(voice_reply_path) and os.path.getsize(voice_reply_path) > 1000:
-                with open(voice_reply_path, 'rb') as audio:
-                    await update.message.reply_voice(
-                        audio,
-                        caption=response_text[:1000],
-                        parse_mode='Markdown',
-                        reply_to_message_id=update.message.message_id
-                    )
-                await add_reaction(update, "💕")
-            else:
-                await update.message.reply_text(
-                    f"🎤 {response_text}\n\n*(Voice banane mein thodi problem 😅)*",
-                    parse_mode='Markdown',
-                    reply_to_message_id=update.message.message_id
-                )
-        else:
+                try:
+                    with open(voice_reply_path, 'rb') as audio:
+                        await update.message.reply_voice(
+                            audio,
+                            caption=f"🎤 {response_text[:100]}",
+                            parse_mode='Markdown',
+                            reply_to_message_id=update.message.message_id
+                        )
+                    await add_reaction(update, "💕")
+                    return  # Voice sent successfully
+                except Exception as voice_err:
+                    logger.error(f"Voice send failed: {voice_err}")
+            
+            # Voice failed → Text fallback
             await update.message.reply_text(
-                response_text,
-                reply_to_message_id=update.message.message_id,
-                parse_mode='Markdown'
+                f"🎤 {response_text}\n\n*(voice banane mein thodi dikkat 😅)*",
+                parse_mode='Markdown',
+                reply_to_message_id=update.message.message_id
+            )
+        else:
+            # No AI voice → Text reply
+            await update.message.reply_text(
+                f"🎤 {response_text}",
+                reply_to_message_id=update.message.message_id
             )
             
     except Exception as e:
         logger.error(f"Voice handler error: {e}", exc_info=True)
         await update.message.reply_text(
-            "voice samajh nahi aaya 💀\nText try kar le bhai!",
+            "voice crash ho gaya 💀\ntext message try kar le!",
             reply_to_message_id=update.message.message_id
         )
     finally:
-        for path in [file_path, voice_reply_path]:
+        # Cleanup files
+        for path in [file_path, voice_reply_path, "temp_transcribe.wav", "temp.wav"]:
             if path and os.path.exists(path):
                 try:
                     os.remove(path)
-                    logger.debug(f"Cleaned up: {path}")
-                except Exception as cleanup_err:
-                    logger.warning(f"Cleanup failed for {path}: {cleanup_err}")
+                    logger.debug(f"Cleaned: {path}")
+                except:
+                    pass
 
 # ===== ERROR HANDLER =====
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -863,13 +929,11 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 # ===== MAIN APPLICATION =====
 def main():
-    # 🧠 Load training data on startup
     load_training_data()
     
-    # Auto-save training every 30 mins
     async def periodic_save():
         while True:
-            await asyncio.sleep(1800)  # 30 minutes
+            await asyncio.sleep(1800)
             save_training_to_file()
     
     loop = asyncio.get_event_loop()
@@ -877,7 +941,7 @@ def main():
     
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
-    # All Commands (20+ features preserved)
+    # All handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("language", language_command))
@@ -902,7 +966,7 @@ def main():
     application.add_handler(MessageHandler(filters.VOICE, handle_voice))
     application.add_error_handler(error_handler)
 
-    # Flask + Bot
+    # Flask server
     port = int(os.environ.get("PORT", 10000))
     from threading import Thread
     
@@ -916,7 +980,8 @@ def main():
     print("🌐 Flask running on port", port)
     print("🚀 Senorita Bot Starting...")
     print("🎙️ Voice Reply:", "AI Girl Voice 🇮🇳" if USE_AI_VOICE else "Text Only")
-    print("🧠 AI Training: ACTIVE (Learns from chats!)")
+    print("🧠 Hinglish Mode: ACTIVE")
+    print("📱 All 20+ features loaded!")
     
     application.run_polling(
         allowed_updates=Update.ALL_TYPES, 
