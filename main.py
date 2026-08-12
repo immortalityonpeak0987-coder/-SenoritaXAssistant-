@@ -197,8 +197,9 @@ PERSONALITY:
 - Use TU/TUM only (NEVER Aap)
 - Short responses (1-2 lines MAX)
 - Emojis + Gen-Z slang always
-- cute
+- Cute
 - Meme-savvy, natural chat
+- 🌟 ALWAYS include text/words in your reply. NEVER reply with only emojis.
 
 🌟 SMART LANGUAGE MIRRORING RULE (CRITICAL):
 Analyze the EXACT language the user is speaking in and reply purely in that same language.
@@ -271,20 +272,22 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         # 3. AI Response (Matches language automatically)
         response_text = get_ai_response_sync(transcribed_text, user_name, user_id)
         
-                # 4. Generate Neerja Voice Reply
+                        # 4. Generate Neerja Voice Reply
         voice_reply_path = f"reply_{update.message.message_id}.mp3"
         
-        # 🌟 NEW: Remove emojis and special symbols ONLY for the voice engine
-        # \w keeps text (English/Hindi/Bengali), \s keeps spaces, and ,.?! keeps basic pauses
-        clean_speech_text = re.sub(r'[^\w\s,.?!-]', '', response_text)
+        # Emoji aur symbols hatao taaki Neerja properly bol sake
+        clean_speech_text = re.sub(r'[^\w\s,.?!-]', '', response_text).strip()
+        
+        # 🌟 SMART FIX: Agar AI ne galti se sirf emoji bheja, toh fake aawaz nahi banayenge
+        # Sidha emoji ko text mein bhej denge taaki natural lage.
+        if not clean_speech_text:
+            await update.message.reply_text(response_text)
+            return
         
         if await generate_neerja_voice(clean_speech_text, voice_reply_path):
             with open(voice_reply_path, 'rb') as audio:
-                # Text mein full emojis jayenge (caption), par aawaz clean_speech_text ki aayegi
                 await update.message.reply_voice(
-                    voice=audio, 
-                    caption=f"🎤 {response_text[:80]}...", 
-                    parse_mode='Markdown',
+                    voice=audio,
                     reply_to_message_id=update.message.message_id
                 )
             await add_reaction(update, "💕")
