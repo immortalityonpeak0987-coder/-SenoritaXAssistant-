@@ -196,10 +196,8 @@ def get_system_prompt() -> str:
 PERSONALITY:
 - Use TU/TUM only (NEVER Aap)
 - Short responses (1-2 lines MAX)
-- Emojis + Gen-Z slang always
 - Cute
-- Meme-savvy, natural chat
-- 🌟 ALWAYS include text/words in your reply. NEVER reply with only emojis.
+- STRICT RULE: NEVER USE EMOJIS. NO EMOJIS ALLOWED IN YOUR RESPONSE.
 
 🌟 SMART LANGUAGE MIRRORING RULE (CRITICAL):
 Analyze the EXACT language the user is speaking in and reply purely in that same language.
@@ -208,6 +206,7 @@ Analyze the EXACT language the user is speaking in and reply purely in that same
 - If user speaks Hinglish (e.g. "kya kar rahi hai") -> Reply in Hinglish.
 - If user speaks English -> Reply in English.
 Matches their language seamlessly without breaking character!"""
+
 
 def get_conversation_history(user_id: int) -> list:
     if user_id not in user_sessions: user_sessions[user_id] = []
@@ -237,7 +236,13 @@ def get_ai_response_sync(user_message: str, user_name: str, user_id: int) -> str
         )
         
         ai_response = response.choices[0].message.content.strip()
-        if not ai_response: ai_response = "haha fr 💀 kya bol raha hai bhai?"
+        
+        # 🌟 NEW BULLETPROOF FIX: Root level par saare emojis/symbols hata do
+        # Isse na text mein emoji aayega, na voice mein, 0% crash chance!
+        ai_response = re.sub(r'[^\w\s,.?!-]', '', ai_response).strip()
+        
+        if not ai_response: 
+            ai_response = "kya bol raha hai bhai samajh nahi aaya"
             
         save_training_data(user_id, user_message, ai_response)
         add_to_conversation(user_id, "user", user_message)
@@ -245,7 +250,8 @@ def get_ai_response_sync(user_message: str, user_name: str, user_id: int) -> str
         
         return ai_response
     except Exception as e:
-        return "Arre yaar kuch gadbad ho gayi 💀\nDobara bol bhai!"
+        logger.error(f"AI Response Error: {str(e)}")
+        return "Arre yaar kuch gadbad ho gayi. Dobara bol bhai!"
 
 # ===== HANDLERS =====
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -272,19 +278,10 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         # 3. AI Response (Matches language automatically)
         response_text = get_ai_response_sync(transcribed_text, user_name, user_id)
         
-                        # 4. Generate Neerja Voice Reply
+                                # 4. Generate Neerja Voice Reply
         voice_reply_path = f"reply_{update.message.message_id}.mp3"
         
-        # Emoji aur symbols hatao taaki Neerja properly bol sake
-        clean_speech_text = re.sub(r'[^\w\s,.?!-]', '', response_text).strip()
-        
-        # 🌟 SMART FIX: Agar AI ne galti se sirf emoji bheja, toh fake aawaz nahi banayenge
-        # Sidha emoji ko text mein bhej denge taaki natural lage.
-        if not clean_speech_text:
-            await update.message.reply_text(response_text)
-            return
-        
-        if await generate_neerja_voice(clean_speech_text, voice_reply_path):
+        if await generate_neerja_voice(response_text, voice_reply_path):
             with open(voice_reply_path, 'rb') as audio:
                 await update.message.reply_voice(
                     voice=audio,
@@ -292,7 +289,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 )
             await add_reaction(update, "💕")
         else:
-            await update.message.reply_text(f"🎤 *{response_text}*", parse_mode='Markdown')
+            await update.message.reply_text(f"🎤 {response_text}")
 
             
     except Exception as e:
