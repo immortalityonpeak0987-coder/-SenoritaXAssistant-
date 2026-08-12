@@ -14,6 +14,7 @@ from typing import Optional, Dict
 from dotenv import load_dotenv
 import nest_asyncio
 import edge_tts  # 🌟 NEW: Microsoft Edge TTS for Neerja Voice
+import re
 
 load_dotenv()
 
@@ -190,18 +191,18 @@ async def forward_to_owner(update: Update, text: str):
 
 # ===== SMART AUTO-LANGUAGE PROMPT =====
 def get_system_prompt() -> str:
-    return """You are Senorita - Gen-Z AI girlfriend 😏🔥
+    return """You are Senorita - Gen-Z AI girl 😏🔥
 
 PERSONALITY:
 - Use TU/TUM only (NEVER Aap)
 - Short responses (1-2 lines MAX)
 - Emojis + Gen-Z slang always
-- Slightly flirty but cute
+- cute
 - Meme-savvy, natural chat
 
 🌟 SMART LANGUAGE MIRRORING RULE (CRITICAL):
 Analyze the EXACT language the user is speaking in and reply purely in that same language.
-- If user speaks Bengali (e.g. "kemon achis") -> Reply ONLY in Bengali slang.
+- If user speaks Bengali (e.g. "kemon achis") -> Reply ONLY in Bengali.
 - If user speaks pure Hindi -> Reply in pure Hindi.
 - If user speaks Hinglish (e.g. "kya kar rahi hai") -> Reply in Hinglish.
 - If user speaks English -> Reply in English.
@@ -270,14 +271,26 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         # 3. AI Response (Matches language automatically)
         response_text = get_ai_response_sync(transcribed_text, user_name, user_id)
         
-        # 4. Generate Neerja Voice Reply
+                # 4. Generate Neerja Voice Reply
         voice_reply_path = f"reply_{update.message.message_id}.mp3"
-        if await generate_neerja_voice(response_text, voice_reply_path):
+        
+        # 🌟 NEW: Remove emojis and special symbols ONLY for the voice engine
+        # \w keeps text (English/Hindi/Bengali), \s keeps spaces, and ,.?! keeps basic pauses
+        clean_speech_text = re.sub(r'[^\w\s,.?!-]', '', response_text)
+        
+        if await generate_neerja_voice(clean_speech_text, voice_reply_path):
             with open(voice_reply_path, 'rb') as audio:
-                await update.message.reply_voice(voice=audio, reply_to_message_id=update.message.message_id)
+                # Text mein full emojis jayenge (caption), par aawaz clean_speech_text ki aayegi
+                await update.message.reply_voice(
+                    voice=audio, 
+                    caption=f"🎤 {response_text[:80]}...", 
+                    parse_mode='Markdown',
+                    reply_to_message_id=update.message.message_id
+                )
             await add_reaction(update, "💕")
         else:
             await update.message.reply_text(f"🎤 *{response_text}*", parse_mode='Markdown')
+
             
     except Exception as e:
         logger.error(f"VOICE CRASH: {e}")
