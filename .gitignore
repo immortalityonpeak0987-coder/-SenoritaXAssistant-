@@ -1,0 +1,13 @@
+.env
+*.session
+*.session-journal
+__pycache__/
+*.pyc
+.venv/
+venv/
+data/*.json
+*.mp3
+*.ogg
+*.wav
+*.part
+.DS_Store
