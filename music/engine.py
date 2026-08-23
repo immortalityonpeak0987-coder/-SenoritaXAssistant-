@@ -105,7 +105,7 @@ class MusicEngine:
         )
         await self.client.start()
         self.calls = PyTgCalls(self.client)
-        self.calls.start()
+        await self.calls.start()
         self.started = True
 
     async def stop(self) -> None:
