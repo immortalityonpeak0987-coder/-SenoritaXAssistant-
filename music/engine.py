@@ -198,6 +198,11 @@ class MusicEngine:
                     "Chrome/131.0 Safari/537.36"
                 )
             },
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["default", "web_embedded"],
+                }
+            },
         }
         if self._cookie_file:
             opts["cookiefile"] = self._cookie_file
